@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Airball — NBA Data Story</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,600;1,300&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">AIRBALL ◆</div>
+  <div class="nav-acts">
+    <div class="nav-act active" onclick="showSection('hero')">Home</div>
+    <div class="nav-act" onclick="showSection('act1')">Act I · Revolution</div>
+    <div class="nav-act" onclick="showSection('act2')">Act II · Era Explorer</div>
+    <div class="nav-act" onclick="showSection('act3')">Act III · Players</div>
+    <div class="nav-act" onclick="showSection('act4')">Act IV · Dynasties</div>
+  </div>
+</nav>
+
+<div class="tooltip" id="tooltip">
+  <div class="tt-name" id="tt-name"></div>
+  <div class="tt-stat" id="tt-stat"></div>
+</div>
+
+<!-- ═══════ HERO ═══════ -->
+<section id="hero" class="visible">
+  <svg class="court-bg" viewBox="0 0 800 500" fill="none" stroke="white" stroke-width="1.5">
+    <rect x="100" y="50" width="600" height="400" rx="4"/>
+    <circle cx="400" cy="250" r="60"/>
+    <line x1="400" y1="50" x2="400" y2="450"/>
+    <rect x="100" y="150" width="160" height="200"/>
+    <rect x="540" y="150" width="160" height="200"/>
+    <path d="M100,150 Q180,250 100,350" fill="none"/>
+    <path d="M700,150 Q620,250 700,350" fill="none"/>
+    <circle cx="400" cy="250" r="4" fill="white"/>
+  </svg>
+  <div style="position:relative; z-index:1; display:flex; flex-direction:column; align-items:center;">
+    <div class="hero-tag">◆ COM-480 Data Visualization Project</div>
+    <h1 class="hero-title">78 YEARS OF<br><span>BASKETBALL</span><br>ONE STORY</h1>
+    <p class="hero-sub">From the post-up era to the three-point revolution — explore how the NBA transformed through data.</p>
+    <div class="hero-acts">
+      <div class="act-pill orange" onclick="showSection('act1')">Act I · The Revolution</div>
+      <div class="act-pill blue" onclick="showSection('act2')">Act II · Era Explorer</div>
+      <div class="act-pill green" onclick="showSection('act3')">Act III · Players</div>
+      <div class="act-pill gold" onclick="showSection('act4')">Act IV · Dynasties</div>
+    </div>
+  </div>
+  <div class="scroll-hint">
+    <span>CLICK AN ACT TO EXPLORE</span>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M8 3v10M3 9l5 5 5-5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </div>
+</section>
+
+<!-- ═══════ ACT 1 ═══════ -->
+<section id="act1">
+  <div class="act-header">
+    <div class="act-number">◆ Act I</div>
+    <div class="act-title">THE <span style="color:var(--accent)">REVOLUTION</span></div>
+    <p class="act-desc">The three-point shot went from a gimmick to the foundation of the modern game. Click each era to see the story unfold.</p>
+  </div>
+  <div class="layout">
+    <div class="story-blocks">
+      <div class="story-block active" onclick="act1Go(0,this)">
+        <div class="year">1980</div>
+        <p>The NBA adopts the three-point line. Teams attempt fewer than 3 threes per game — coaches think it's a gimmick.</p>
+      </div>
+      <div class="story-block" onclick="act1Go(1,this)">
+        <div class="year">1994–97</div>
+        <p>The league temporarily shortens the arc to 22 ft. Three-point attempts spike, then collapse when the distance is restored.</p>
+      </div>
+      <div class="story-block" onclick="act1Go(2,this)">
+        <div class="year">2012</div>
+        <p>Analytics departments prove the three is the most efficient shot in basketball. Teams start listening — fast.</p>
+      </div>
+      <div class="story-block" onclick="act1Go(3,this)">
+        <div class="year">2016</div>
+        <p>The Golden State Warriors win 73 games on a record number of threes. Steph Curry rewires how every coach thinks about offense.</p>
+      </div>
+      <div class="story-block" onclick="act1Go(4,this)">
+        <div class="year">2024</div>
+        <p>Teams now attempt 35+ threes per game on average — 17× more than in 1980. The mid-range is nearly extinct.</p>
+      </div>
+    </div>
+    <div class="chart-area">
+      <div class="chart-title-sm">League-avg 3-point attempts per game · 1980–2026</div>
+      <svg id="act1-chart" width="100%" viewBox="0 0 560 280" style="overflow:visible"></svg>
+      <div style="margin-top:0.8rem; font-size:0.75rem; color:var(--muted);">↑ Click the story panels on the left to animate annotations</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ ACT 2 ═══════ -->
+<section id="act2">
+  <div class="act-header">
+    <div class="act-number">◆ Act II</div>
+    <div class="act-title">ERA <span style="color:var(--accent2)">EXPLORER</span></div>
+    <p class="act-desc">Every bubble is a player-season. Size = minutes played. Color = position. Drag the year or hit Play to animate through NBA history.</p>
+  </div>
+  <div class="inner">
+    <div class="controls-row">
+      <input class="search-box" placeholder="🔍 Search player…" id="search2" oninput="highlightPlayer(this.value)">
+      <div class="pos-legend">
+        <div class="pos-dot"><span style="background:var(--pg)"></span> PG</div>
+        <div class="pos-dot"><span style="background:var(--sg)"></span> SG</div>
+        <div class="pos-dot"><span style="background:var(--sf)"></span> SF</div>
+        <div class="pos-dot"><span style="background:var(--pf)"></span> PF</div>
+        <div class="pos-dot"><span style="background:var(--c)"></span> C</div>
+      </div>
+      <div class="year-control">
+        <button class="play-btn" onclick="togglePlay()">
+          <svg id="play-icon" width="14" height="14" viewBox="0 0 14 14" fill="white">
+            <polygon points="3,1 13,7 3,13"/>
+          </svg>
+        </button>
+        <div class="year-display" id="year-display">2015</div>
+        <input type="range" min="1982" max="2026" value="2015" id="year-slider"
+          style="width:140px; accent-color:var(--accent2);" oninput="updateYear(this.value)">
+      </div>
+    </div>
+    <div class="bubble-chart-wrap">
+      <svg id="act2-chart" width="100%" viewBox="0 0 700 360" style="overflow:visible"></svg>
+      <div style="margin-top:0.5rem; display:flex; justify-content:space-between; font-size:0.72rem; color:var(--muted); padding:0 0.5rem;">
+        <span>← Lower Usage (role player)</span>
+        <span>X: Usage Rate % &nbsp;|&nbsp; Y: True Shooting % &nbsp;|&nbsp; Size: min/game</span>
+        <span>Higher Usage (star) →</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ ACT 3 ═══════ -->
+<section id="act3">
+  <div class="act-header">
+    <div class="act-number">◆ Act III</div>
+    <div class="act-title">PLAYER <span style="color:#66bb6a">VS</span> PLAYER</div>
+    <p class="act-desc">Search any two players and compare across 8 career metrics — normalized so Jordan and Jokic can be fairly compared across eras.</p>
+  </div>
+  <div class="inner">
+    <div style="display:flex; gap:1rem; margin-bottom:1.5rem; align-items:center;">
+      <div class="toggle-row">
+        <button class="toggle-btn active" onclick="setMode('normalized',this)">Normalized</button>
+        <button class="toggle-btn" onclick="setMode('raw',this)">Raw stats</button>
+      </div>
+      <span style="font-size:0.78rem; color:var(--muted);">Normalized = percentile rank across all NBA history</span>
+    </div>
+    <div class="player-compare">
+      <div class="player-card" style="border-color:rgba(29,111,232,0.3);">
+        <div class="label">Player A</div>
+        <div class="search-wrap">
+          <input class="player-search" id="searchA" placeholder="Search player A…" oninput="searchPlayer('A',this.value)" autocomplete="off">
+          <div class="autocomplete-list" id="listA"></div>
+        </div>
+        <div class="player-name-display" id="nameA" style="color:var(--accent2);">LeBron James</div>
+        <div id="statsA"></div>
+      </div>
+      <div class="radar-center">
+        <div class="radar-label" id="radar-mode-label">Normalized<br>career stats</div>
+        <svg id="radar-chart" viewBox="0 0 240 240" width="240" height="240"></svg>
+        <div style="display:flex; gap:1rem; font-size:0.75rem;">
+          <span style="color:var(--accent2);" id="legend-a">■ Player A</span>
+          <span style="color:var(--accent);" id="legend-b">■ Player B</span>
+        </div>
+      </div>
+      <div class="player-card" style="border-color:rgba(232,98,26,0.3);">
+        <div class="label">Player B</div>
+        <div class="search-wrap">
+          <input class="player-search" id="searchB" placeholder="Search player B…" oninput="searchPlayer('B',this.value)" autocomplete="off">
+          <div class="autocomplete-list" id="listB"></div>
+        </div>
+        <div class="player-name-display" id="nameB" style="color:var(--accent);">Michael Jordan</div>
+        <div id="statsB"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ ACT 4 ═══════ -->
+<section id="act4">
+  <div class="act-header">
+    <div class="act-number">◆ Act IV</div>
+    <div class="act-title">THE <span style="color:var(--gold)">DYNASTIES</span></div>
+    <p class="act-desc">Six franchises defined modern basketball. Click a team in the legend to highlight their dynasty window.</p>
+  </div>
+  <div class="inner">
+    <div class="dynasty-legend" id="dynasty-legend"></div>
+    <div class="chart-wrap-4">
+      <div class="chart-title-sm">Win % per season · 1990–2026 · hover for details</div>
+      <div style="position:relative; width:100%; height:360px;">
+        <canvas id="act4-chart" role="img" aria-label="Line chart showing win percentage over time for 6 NBA dynasty franchises: Bulls, Lakers, Spurs, Heat, Warriors, and Celtics from 1990 to 2026.">Win percentage trends for top NBA dynasties 1990–2026.</canvas>
+      </div>
+      <div style="margin-top:0.8rem; font-size:0.72rem; color:var(--muted);">
+        Click a team in the legend to highlight · Hover over lines for details
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="main.js"></script>
+</body>
+</html>
