@@ -67,7 +67,7 @@ Three-point attempts grew **10×** from the 1980s to the 2020s, accelerating sha
 ## Milestone 2 (17th April, 5pm)
 
 **10% of the final grade**
-
+[Milestone 2 PDF](./Milestone%202/Milestone%202%20(Airball).pdf)
 
 ## Milestone 3 (29th May, 5pm)
 
