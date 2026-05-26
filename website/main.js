@@ -27,6 +27,69 @@ async function ensureLoaded(act) {
 }
 
 // =============================================================================
+// CONFETTI (lightweight, one canvas, basketball-orange palette)
+// =============================================================================
+const confettiCanvas = document.getElementById('confetti');
+const confettiCtx = confettiCanvas ? confettiCanvas.getContext('2d') : null;
+let confettiParticles = [];
+let confettiAnimating = false;
+function sizeConfetti() {
+  if (!confettiCanvas) return;
+  confettiCanvas.width = window.innerWidth * devicePixelRatio;
+  confettiCanvas.height = window.innerHeight * devicePixelRatio;
+  confettiCtx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+window.addEventListener('resize', sizeConfetti);
+sizeConfetti();
+
+function fireConfetti(clientX, clientY, opts = {}) {
+  if (!confettiCtx) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const count = opts.count || 50;
+  const palette = opts.colors || ['#ff6b1a', '#f5c518', '#4d8dff', '#4ade80', '#ffffff'];
+  for (let i = 0; i < count; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const speed = 3 + Math.random() * 6;
+    confettiParticles.push({
+      x: clientX, y: clientY,
+      vx: Math.cos(ang) * speed,
+      vy: Math.sin(ang) * speed - 2,
+      g: 0.18 + Math.random() * 0.08,
+      r: 2 + Math.random() * 3,
+      rot: Math.random() * Math.PI * 2,
+      rv: (Math.random() - 0.5) * 0.3,
+      life: 60 + Math.random() * 40,
+      color: palette[(Math.random() * palette.length) | 0],
+    });
+  }
+  if (!confettiAnimating) {
+    confettiAnimating = true;
+    requestAnimationFrame(tickConfetti);
+  }
+}
+function tickConfetti() {
+  confettiCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  confettiParticles = confettiParticles.filter(p => {
+    p.vy += p.g;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.rot += p.rv;
+    p.life -= 1;
+    if (p.life <= 0 || p.y > window.innerHeight + 40) return false;
+    confettiCtx.save();
+    confettiCtx.translate(p.x, p.y);
+    confettiCtx.rotate(p.rot);
+    confettiCtx.fillStyle = p.color;
+    confettiCtx.globalAlpha = Math.min(1, p.life / 30);
+    confettiCtx.fillRect(-p.r, -p.r * 0.5, p.r * 2, p.r);
+    confettiCtx.restore();
+    return true;
+  });
+  if (confettiParticles.length) requestAnimationFrame(tickConfetti);
+  else confettiAnimating = false;
+}
+
+// =============================================================================
 // SECTION SWITCHER
 // =============================================================================
 const sections = ['hero', 'act1', 'act2', 'act3', 'act4'];
@@ -90,17 +153,22 @@ document.addEventListener('mousemove', e => {
 });
 
 // =============================================================================
-// HERO — animated mini 3PA chart
+// HERO — animated mini 3PA chart + bouncing basketball + click-to-scrub
 // =============================================================================
 let heroDrawn = false;
+let heroScrubDataCache = null;
+let heroAnimFrame = null;
+let heroAnimToken = 0;
 function drawHeroChart() {
   const d = DATA.act1;
   if (!d) return;
+  if (heroAnimFrame) cancelAnimationFrame(heroAnimFrame);
+  const animToken = ++heroAnimToken;
 
   const svg = d3.select('#hero-chart');
   svg.selectAll('*').remove();
   const W = 380, H = 220;
-  const m = { top: 14, right: 6, bottom: 18, left: 6 };
+  const m = { top: 14, right: 16, bottom: 18, left: 6 };
   const iw = W - m.left - m.right;
   const ih = H - m.top - m.bottom;
 
@@ -109,6 +177,7 @@ function drawHeroChart() {
   const x = d3.scaleLinear().domain(d3.extent(d.seasons)).range([0, iw]);
   const y = d3.scaleLinear().domain([0, d3.max(d.x3pa) * 1.08]).range([ih, 0]);
   const data = d.seasons.map((s, i) => ({ s, v: d.x3pa[i] }));
+  heroScrubDataCache = { data, x, y, iw, ih, m, W, H };
 
   const line = d3.line().x(p => x(p.s)).y(p => y(p.v)).curve(d3.curveMonotoneX);
   const area = d3.area().x(p => x(p.s)).y0(ih).y1(p => y(p.v)).curve(d3.curveMonotoneX);
@@ -136,9 +205,15 @@ function drawHeroChart() {
   grad.append('stop').attr('offset', '0').attr('stop-color', '#ff6b1a').attr('stop-opacity', 0.6);
   grad.append('stop').attr('offset', '1').attr('stop-color', '#ff6b1a').attr('stop-opacity', 0);
 
-  // Area + line (start hidden, animate in)
+  // Basketball gradient (radial)
+  const ballGrad = defs.append('radialGradient').attr('id', 'ball-grad').attr('cx', '0.35').attr('cy', '0.35').attr('r', '0.7');
+  ballGrad.append('stop').attr('offset', '0').attr('stop-color', '#ffb27a');
+  ballGrad.append('stop').attr('offset', '0.5').attr('stop-color', '#ff6b1a');
+  ballGrad.append('stop').attr('offset', '1').attr('stop-color', '#9c3a0a');
+
+  // Area + line
   const areaP = root.append('path').attr('d', area(data)).attr('fill', 'url(#hero-grad)').style('opacity', 0);
-  const lineP = root.append('path').attr('d', line(data)).attr('fill', 'none').attr('stroke', '#ff6b1a').attr('stroke-width', 2.4).attr('stroke-linecap', 'round');
+  const lineP = root.append('path').attr('class', 'hero-line').attr('d', line(data)).attr('fill', 'none').attr('stroke', '#ff6b1a').attr('stroke-width', 2.4).attr('stroke-linecap', 'round');
 
   // Stroke-draw the line
   const total = lineP.node().getTotalLength();
@@ -146,13 +221,77 @@ function drawHeroChart() {
   lineP.transition().duration(2400).ease(d3.easeCubicOut).attr('stroke-dashoffset', 0);
   areaP.transition().delay(400).duration(2000).style('opacity', 1);
 
-  // Endpoint marker
+  // Basketball that travels along the line
+  const ballG = root.append('g').attr('class', 'hoop').style('opacity', 0);
+  ballG.append('circle').attr('r', 7).attr('fill', 'url(#ball-grad)').attr('stroke', '#3a1a08').attr('stroke-width', 0.8);
+  ballG.append('path').attr('d', 'M-7 0 L7 0').attr('stroke', '#3a1a08').attr('stroke-width', 0.7).attr('fill', 'none');
+  ballG.append('path').attr('d', 'M0 -7 L0 7').attr('stroke', '#3a1a08').attr('stroke-width', 0.7).attr('fill', 'none');
+  ballG.append('path').attr('d', 'M-5 -5 Q0 0 -5 5').attr('stroke', '#3a1a08').attr('stroke-width', 0.6).attr('fill', 'none');
+  ballG.append('path').attr('d', 'M5 -5 Q0 0 5 5').attr('stroke', '#3a1a08').attr('stroke-width', 0.6).attr('fill', 'none');
+  ballG.style('opacity', 1);
+
+  // Animate ball along the path
+  const pathNode = lineP.node();
+  const startT = performance.now();
+  const duration = 2400;
+  function animateBall(now) {
+    if (animToken !== heroAnimToken) return;
+    const k = Math.min(1, (now - startT) / duration);
+    const e = 1 - Math.pow(1 - k, 3);
+    const p = pathNode.getPointAtLength(e * total);
+    const bob = Math.sin(now * 0.012) * 1.2;
+    ballG.attr('transform', `translate(${p.x},${p.y + bob}) rotate(${(now * 0.5) % 360})`);
+    if (k < 1) heroAnimFrame = requestAnimationFrame(animateBall);
+    else {
+      // Idle bob at endpoint
+      function idle(t) {
+        if (animToken !== heroAnimToken || document.getElementById('hero')?.style.display === 'none') return;
+        const last = pathNode.getPointAtLength(total);
+        const bobY = Math.sin(t * 0.004) * 2;
+        ballG.attr('transform', `translate(${last.x},${last.y + bobY}) rotate(${(t * 0.2) % 360})`);
+        heroAnimFrame = requestAnimationFrame(idle);
+      }
+      heroAnimFrame = requestAnimationFrame(idle);
+    }
+  }
+  heroAnimFrame = requestAnimationFrame(animateBall);
+
+  // Endpoint marker (subtle ring behind ball)
   const last = data[data.length - 1];
   root.append('circle')
     .attr('cx', x(last.s)).attr('cy', y(last.v))
-    .attr('r', 0).attr('fill', '#ff6b1a')
-    .attr('stroke', 'var(--bg-card)').attr('stroke-width', 2)
-    .transition().delay(2200).duration(400).attr('r', 5);
+    .attr('r', 0).attr('fill', 'none').attr('stroke', 'rgba(255,107,26,0.4)').attr('stroke-width', 1)
+    .transition().delay(2200).duration(400).attr('r', 12);
+
+  // Click-to-scrub overlay → highlights chosen year on small-multiples
+  const tipEl2 = ensureHeroScrubTip();
+  const overlay = root.append('rect').attr('width', iw).attr('height', ih).attr('fill', 'transparent').style('cursor', 'crosshair');
+  overlay.on('mousemove', function (e) {
+    const [mx, my] = d3.pointer(e, this);
+    const s = Math.round(x.invert(mx));
+    const idx = d.seasons.indexOf(s);
+    if (idx < 0) { tipEl2.classList.remove('show'); return; }
+    const v = d.x3pa[idx];
+    const cardRect = document.querySelector('.hero-card').getBoundingClientRect();
+    const svgRect = svg.node().getBoundingClientRect();
+    const px = svgRect.left - cardRect.left + (m.left + x(s)) * (svgRect.width / W);
+    const py = svgRect.top - cardRect.top + (m.top + y(v)) * (svgRect.height / H);
+    tipEl2.style.left = px + 'px';
+    tipEl2.style.top = (py - 6) + 'px';
+    tipEl2.innerHTML = `<span class="yr">${s}</span> · ${v.toFixed(1)} 3PA`;
+    tipEl2.classList.add('show');
+  });
+  overlay.on('mouseleave', () => tipEl2.classList.remove('show'));
+  overlay.on('click', function (e) {
+    const [mx] = d3.pointer(e, this);
+    const s = Math.round(x.invert(mx));
+    const idx = d.seasons.indexOf(s);
+    if (idx < 0) return;
+    fireConfetti(e.clientX, e.clientY, { count: 30 });
+    // Spark a pop on the endpoint values
+    const endEl = document.getElementById('hero-stat-end');
+    if (endEl) { endEl.style.animation = 'none'; void endEl.offsetWidth; endEl.style.animation = 'pop 380ms var(--ease)'; }
+  });
 
   // Animate the big counters (rolling number)
   if (!heroDrawn) {
@@ -161,6 +300,16 @@ function drawHeroChart() {
     animateNumber(document.getElementById('hero-stat-mult'),  1, 13, 2200, v => Math.round(v) + '×');
   }
   heroDrawn = true;
+}
+
+function ensureHeroScrubTip() {
+  let tip = document.querySelector('.hero-scrub-tip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.className = 'hero-scrub-tip';
+    document.querySelector('.hero-card').appendChild(tip);
+  }
+  return tip;
 }
 
 function animateNumber(el, from, to, dur, fmt) {
@@ -385,7 +534,16 @@ function drawSmallMults() {
 // =============================================================================
 const posColors = { PG: '#4fc3f7', SG: '#ff6b1a', SF: '#66bb6a', PF: '#ab47bc', C: '#ef5350' };
 let currentYear = 2015, highlightName = '', playing = false, playInterval = null;
-let mutedPos = new Set(); // positions hidden by legend toggle
+let mutedPos = new Set();
+let trailMode = false;
+
+function toggleTrail() {
+  trailMode = !trailMode;
+  const btn = document.getElementById('trail-toggle');
+  btn.classList.toggle('active', trailMode);
+  btn.setAttribute('aria-pressed', trailMode);
+  drawAct2();
+}
 
 function eraNameForYear(y) {
   if (y < 1985) return 'The Magic & Bird Era';
@@ -441,6 +599,7 @@ function drawAct2() {
   if (!DATA.act2) return;
   const allPlayers = DATA.act2[String(currentYear)] || [];
   const players = allPlayers.filter(p => !mutedPos.has(p.pos));
+  updateSeasonDNA(players);
 
   // Era watermark
   document.getElementById('era-watermark').textContent = eraNameForYear(currentYear);
@@ -520,6 +679,28 @@ function drawAct2() {
 
   // Bubbles
   const keyed = players.map(p => ({ ...p, _key: p.player + ':' + p.pos }));
+
+  // ✨ TRAIL MODE — ghost bubbles at where each player was 3 years ago
+  const trailGroup = root.select('g.trails');
+  if (!trailGroup.node()) root.insert('g', 'g.bubbles').attr('class', 'trails');
+  const trailsSel = root.select('g.trails');
+  trailsSel.selectAll('*').remove();
+  if (trailMode) {
+    const past = DATA.act2[String(currentYear - 3)] || [];
+    const pastByPlayer = new Map(past.map(p => [p.player, p]));
+    keyed.forEach(p => {
+      const prev = pastByPlayer.get(p.player);
+      if (!prev || mutedPos.has(p.pos)) return;
+      trailsSel.append('line').attr('class', 'trail-line')
+        .attr('x1', x(prev.usg_percent)).attr('y1', y(prev.ts_percent))
+        .attr('x2', x(p.usg_percent)).attr('y2', y(p.ts_percent));
+      trailsSel.append('circle').attr('class', 'ghost-bubble')
+        .attr('cx', x(prev.usg_percent)).attr('cy', y(prev.ts_percent))
+        .attr('r', 4 + prev.mp_per_game * 0.17)
+        .attr('stroke', posColors[prev.pos] || 'var(--muted)');
+    });
+  }
+
   const bubbles = root.select('g.bubbles').selectAll('circle.player').data(keyed, d => d._key);
 
   bubbles.exit().transition().duration(380).attr('r', 0).style('opacity', 0).remove();
@@ -544,7 +725,11 @@ function drawAct2() {
       return d.player.toLowerCase().includes(highlightName) ? 1 : 0.15;
     })
     .attr('stroke', d => (highlightName && d.player.toLowerCase().includes(highlightName)) ? '#fff' : 'none')
-    .attr('stroke-width', d => (highlightName && d.player.toLowerCase().includes(highlightName)) ? 2 : 0);
+    .attr('stroke-width', d => (highlightName && d.player.toLowerCase().includes(highlightName)) ? 2.5 : 0);
+
+  // Toggle pulse class for highlighted bubbles
+  root.select('g.bubbles').selectAll('circle.player')
+    .classed('highlighted', d => highlightName && d.player.toLowerCase().includes(highlightName));
 
   // Labels for top minute players or highlight matches
   const labelled = keyed.filter(p =>
@@ -563,6 +748,38 @@ function drawAct2() {
     .text(d => d.player.split(' ').slice(-1)[0]);
 }
 
+function updateSeasonDNA(players) {
+  const empty = !players.length;
+  const byMax = (key) => empty ? null : [...players].sort((a, b) => b[key] - a[key])[0];
+  const usage = byMax('usg_percent');
+  const scoring = byMax('pts_per_game');
+  const efficiency = byMax('ts_percent');
+
+  const setText = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  setText('dna-usage-name', usage ? usage.player : '—');
+  setText('dna-usage-stat', usage ? `${usage.usg_percent}% usage · ${usage.pos}` : '—');
+  setText('dna-scoring-name', scoring ? scoring.player : '—');
+  setText('dna-scoring-stat', scoring ? `${scoring.pts_per_game} PPG · ${scoring.pos}` : '—');
+  setText('dna-eff-name', efficiency ? efficiency.player : '—');
+  setText('dna-eff-stat', efficiency ? `${efficiency.ts_percent}% TS · ${efficiency.pos}` : '—');
+
+  const stack = document.getElementById('dna-pos-stack');
+  const posStat = document.getElementById('dna-pos-stat');
+  if (!stack || !posStat) return;
+  const total = players.length || 1;
+  const counts = ['PG', 'SG', 'SF', 'PF', 'C'].map(pos => ({
+    pos,
+    count: players.filter(p => p.pos === pos).length,
+  })).filter(d => d.count > 0);
+  stack.innerHTML = counts.map(d => `
+    <span class="pos-seg" style="--w:${(d.count / total * 100).toFixed(2)}%;--c:${posColors[d.pos]};" title="${d.pos}: ${d.count}"></span>
+  `).join('');
+  posStat.textContent = counts.map(d => `${d.pos} ${d.count}`).join(' · ') || '—';
+}
+
 // =============================================================================
 // ACT 3 — Player vs Player
 // =============================================================================
@@ -571,10 +788,39 @@ const METRICS = ['pts_per_game', 'trb_per_game', 'ast_per_game', 'ts_percent', '
 const STAT_LABELS = ['Points / game', 'Rebounds / game', 'Assists / game', 'True Shooting %', 'Win Shares / 48', 'Box +/-', 'VORP', 'PER'];
 const LABELS = ['PTS', 'REB', 'AST', 'TS%', 'WS/48', 'BPM', 'VORP', 'PER'];
 const RAW_SCALES = { pts_per_game: 40, trb_per_game: 15, ast_per_game: 12, ts_percent: 70, ws_48: 0.3, bpm: 15, vorp: 15, per: 35 };
+const RAW_FMT = {
+  pts_per_game: v => v.toFixed(1),
+  trb_per_game: v => v.toFixed(1),
+  ast_per_game: v => v.toFixed(1),
+  ts_percent: v => v.toFixed(1) + '%',
+  ws_48: v => v.toFixed(3),
+  bpm: v => (v >= 0 ? '+' : '') + v.toFixed(1),
+  vorp: v => v.toFixed(1),
+  per: v => v.toFixed(1),
+};
+
+// Hand-curated championship counts (career rings) for the most-searched players.
+// Missing players get 0 rings displayed as "— no rings—" tag.
+const PLAYER_RINGS = {
+  'Michael Jordan': 6, 'LeBron James': 4, 'Kobe Bryant': 5, 'Shaquille O\'Neal': 4,
+  'Tim Duncan': 5, 'Magic Johnson': 5, 'Larry Bird': 3, 'Kareem Abdul-Jabbar': 6,
+  'Hakeem Olajuwon': 2, 'Stephen Curry': 4, 'Kevin Durant': 2, 'Kawhi Leonard': 2,
+  'Dwyane Wade': 3, 'Manu Ginobili': 4, 'Tony Parker': 4, 'Scottie Pippen': 6,
+  'Dennis Rodman': 5, 'Robert Horry': 7, 'Derek Fisher': 5, 'Pau Gasol': 2,
+  'Klay Thompson': 4, 'Draymond Green': 4, 'Andre Iguodala': 4, 'Kevin Garnett': 1,
+  'Paul Pierce': 1, 'Ray Allen': 2, 'Chris Bosh': 2, 'Jason Kidd': 1,
+  'Dirk Nowitzki': 1, 'Giannis Antetokounmpo': 1, 'Kyrie Irving': 1, 'Nikola Joki\u0107': 1,
+  'Nikola Jokic': 1, 'Jamal Murray': 1, 'Jayson Tatum': 1, 'Jaylen Brown': 1,
+  'Allen Iverson': 0, 'Charles Barkley': 0, 'Karl Malone': 0, 'John Stockton': 0,
+  'Patrick Ewing': 0, 'Reggie Miller': 0, 'James Harden': 0, 'Chris Paul': 0,
+  'Russell Westbrook': 0, 'Damian Lillard': 0, 'Carmelo Anthony': 0, 'Vince Carter': 0,
+  'Tracy McGrady': 0, 'Steve Nash': 0, 'Dominique Wilkins': 0,
+};
 
 let act3Initialized = false;
 function initAct3Defaults() {
-  if (!DATA.act3 || act3Initialized) { drawRadar(); return; }
+  if (!DATA.act3) return;
+  if (act3Initialized) { drawRadar(); drawHeadToHead(); return; }
   const s = DATA.act3.search;
   const lb = s.find(p => p.name === 'LeBron James');
   const mj = s.find(p => p.name === 'Michael Jordan');
@@ -633,9 +879,29 @@ function selectAct3Player(slot, pid) {
   document.getElementById('list' + slot).classList.remove('open');
   // Clear quickpick highlight if user picks manually
   document.querySelectorAll('.qp').forEach(q => q.classList.remove('active'));
+  renderRings(slot);
   renderStatTables();
   drawRadar();
   updateVerdict();
+  drawHeadToHead();
+}
+
+function renderRings(slot) {
+  const player = slot === 'A' ? playerA : playerB;
+  const el = document.getElementById('rings' + slot);
+  if (!el || !player) return;
+  const count = PLAYER_RINGS[player.name] ?? null;
+  if (count === null) {
+    el.innerHTML = '<span class="no-ring">— rings data n/a</span>';
+    return;
+  }
+  if (count === 0) {
+    el.innerHTML = '<span class="no-ring">no rings</span>';
+    return;
+  }
+  const ringSVG = `<svg viewBox="0 0 20 20"><circle cx="10" cy="12" r="4.5" fill="none" stroke="#f5c518" stroke-width="1.5"/><path d="M7 6 L10 2 L13 6 Z" fill="#f5c518"/><circle cx="10" cy="4" r="1.2" fill="#fff8dc"/></svg>`;
+  const rings = Array.from({ length: count }).map(() => `<span class="ring">${ringSVG}</span>`).join('');
+  el.innerHTML = rings + `<span class="ring-count">×${count}</span>`;
 }
 
 function renderStatTables() {
@@ -662,14 +928,19 @@ function setMode(mode, btn) {
     mode === 'normalized' ? 'Normalized<br>career stats' : 'Raw career<br>stats';
   document.getElementById('mode-explain').textContent =
     mode === 'normalized'
-      ? 'Percentile rank across all NBA history (1977 →). Bigger is better.'
+      ? 'Percentile rank across all NBA history (1974 →). Bigger is better.'
       : 'Raw career averages — context-free. Eras vary wildly in pace.';
   drawRadar();
   updateVerdict();
+  drawHeadToHead();
 }
 
 function updateVerdict() {
   const el = document.getElementById('verdict');
+  const scA = document.getElementById('sc-a-num');
+  const scB = document.getElementById('sc-b-num');
+  const labA = document.getElementById('sc-a-lbl');
+  const labB = document.getElementById('sc-b-lbl');
   if (!playerA || !playerB) { el.innerHTML = ''; return; }
   const src = (p) => radarMode === 'normalized' ? p.normalized : p.stats;
   let winA = 0, winB = 0;
@@ -677,15 +948,77 @@ function updateVerdict() {
     const a = src(playerA)[m] || 0, b = src(playerB)[m] || 0;
     if (a > b) winA++; else if (b > a) winB++;
   });
+  const ties = METRICS.length - winA - winB;
   const lastA = playerA.name.split(' ').slice(-1)[0];
   const lastB = playerB.name.split(' ').slice(-1)[0];
+  const tieClause = ties ? `, with ${ties} ${ties === 1 ? 'tie' : 'ties'}` : '';
+
+  // Animate score counter
+  const oldA = parseInt(scA.textContent || '0', 10);
+  const oldB = parseInt(scB.textContent || '0', 10);
+  animateNumber(scA, oldA, winA, 600, v => Math.round(v));
+  animateNumber(scB, oldB, winB, 600, v => Math.round(v));
+  labA.textContent = lastA.slice(0, 8);
+  labB.textContent = lastB.slice(0, 8);
+  scA.classList.toggle('winning', winA > winB);
+  scB.classList.toggle('winning', winB > winA);
+
   if (winA === winB) {
-    el.innerHTML = `<strong>${lastA}</strong> and <strong>${lastB}</strong> split it ${winA}–${winB} across 8 metrics.`;
+    el.innerHTML = `Split decision — <strong>${lastA}</strong> and <strong>${lastB}</strong> tie ${winA}–${winB}${tieClause}.`;
   } else if (winA > winB) {
-    el.innerHTML = `<strong>${lastA}</strong> leads <strong>${winA}–${winB}</strong> across ${METRICS.length} ${radarMode} metrics.`;
+    el.innerHTML = `<strong>${lastA}</strong> wins <strong>${winA}–${winB}</strong>${tieClause} across ${METRICS.length} ${radarMode} metrics.`;
   } else {
-    el.innerHTML = `<strong>${lastB}</strong> leads <strong>${winB}–${winA}</strong> across ${METRICS.length} ${radarMode} metrics.`;
+    el.innerHTML = `<strong>${lastB}</strong> wins <strong>${winB}–${winA}</strong>${tieClause} across ${METRICS.length} ${radarMode} metrics.`;
   }
+
+  // Confetti on blowout (≥6 wins)
+  if (Math.abs(winA - winB) >= 6) {
+    const r = document.querySelector('.score-counter')?.getBoundingClientRect();
+    if (r) setTimeout(() => fireConfetti(r.left + r.width / 2, r.top + r.height / 2, { count: 40 }), 400);
+  }
+}
+
+function drawHeadToHead() {
+  const wrap = document.getElementById('h2h-bars');
+  if (!wrap || !playerA || !playerB) { if (wrap) wrap.innerHTML = ''; return; }
+  const srcA = radarMode === 'normalized' ? playerA.normalized : playerA.stats;
+  const srcB = radarMode === 'normalized' ? playerB.normalized : playerB.stats;
+  const rows = METRICS.map((m, i) => {
+    const a = srcA[m] || 0, b = srcB[m] || 0;
+    let aPct, bPct;
+    if (radarMode === 'normalized') {
+      aPct = Math.min(100, Math.max(0, a));
+      bPct = Math.min(100, Math.max(0, b));
+    } else {
+      const max = Math.max(a, b) || 1;
+      aPct = (a / max) * 100;
+      bPct = (b / max) * 100;
+    }
+    const aWin = a > b, bWin = b > a;
+    const aDisp = radarMode === 'normalized' ? `${Math.round(a)} pct` : (RAW_FMT[m] ? RAW_FMT[m](playerA.stats[m] || 0) : a.toFixed(1));
+    const bDisp = radarMode === 'normalized' ? `${Math.round(b)} pct` : (RAW_FMT[m] ? RAW_FMT[m](playerB.stats[m] || 0) : b.toFixed(1));
+    return `
+      <div class="h2h-row">
+        <div class="h2h-bar-wrap left">
+          <span class="h2h-bar-val ${aWin ? 'winner-a' : ''}">${aDisp}</span>
+          <div class="h2h-bar bar-a ${aWin ? 'winner' : ''}" style="width: ${aPct * 0.7}%"></div>
+        </div>
+        <div class="h2h-metric">${LABELS[i]}</div>
+        <div class="h2h-bar-wrap">
+          <div class="h2h-bar bar-b ${bWin ? 'winner' : ''}" style="width: ${bPct * 0.7}%"></div>
+          <span class="h2h-bar-val ${bWin ? 'winner-b' : ''}">${bDisp}</span>
+        </div>
+      </div>`;
+  }).join('');
+  // Animate from 0 width
+  wrap.innerHTML = rows;
+  wrap.querySelectorAll('.h2h-bar').forEach(bar => {
+    const targetW = bar.style.width;
+    bar.style.width = '0%';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { bar.style.width = targetW; });
+    });
+  });
 }
 
 function drawRadar() {
@@ -885,7 +1218,7 @@ function drawAct4() {
     }
   });
 
-  // Championship markers
+  // Championship markers (rings instead of diamonds)
   const champGroup = root.append('g').attr('class', 'champs');
   teams.forEach(([name, d]) => {
     if (!activeTeams.has(name)) return;
@@ -895,11 +1228,17 @@ function drawAct4() {
       const px = x(season), py = y(d.wins[idx]);
       const g = champGroup.append('g').attr('transform', `translate(${px},${py})`).style('opacity', 0)
         .style('cursor', 'pointer')
-        .on('mouseenter', () => showTip(name + ' · ' + season, `Championship season<br>${Math.round(d.wins[idx] * 100)}% win rate`, 'gold'))
+        .on('mouseenter', function (e) {
+          showTip(name + ' · ' + season, `Championship season<br>${Math.round(d.wins[idx] * 100)}% win rate`, 'gold');
+          // Confetti burst
+          fireConfetti(e.clientX, e.clientY, { count: 25, colors: ['#f5c518', '#ffd44a', '#ff6b1a', d.color] });
+        })
         .on('mouseleave', hideTip);
-      g.append('rect').attr('x', -6).attr('y', -6).attr('width', 12).attr('height', 12)
-        .attr('transform', 'rotate(45)')
-        .attr('fill', '#f5c518').attr('stroke', 'var(--bg)').attr('stroke-width', 1.5);
+      // Ring icon: gold trophy/ring
+      g.append('circle').attr('r', 7).attr('fill', d.color).attr('opacity', 0.18);
+      g.append('circle').attr('r', 5).attr('fill', 'none').attr('stroke', '#f5c518').attr('stroke-width', 1.6);
+      g.append('path').attr('d', 'M-3 -4 L0 -8 L3 -4 Z').attr('fill', '#f5c518');
+      g.append('circle').attr('cx', 0).attr('cy', -6).attr('r', 1.2).attr('fill', '#fff8dc');
       g.transition().delay(1100).duration(300).style('opacity', 1);
     });
   });

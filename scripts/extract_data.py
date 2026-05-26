@@ -3,8 +3,11 @@ import numpy as np
 import json
 import os
 
-DATA_DIR = "data"
-OUT_DIR  = "js"
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(ROOT_DIR, "data")
+if not os.path.isdir(DATA_DIR):
+    DATA_DIR = os.path.join(ROOT_DIR, "archive")
+OUT_DIR  = os.path.join(ROOT_DIR, "js")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 def save_json(obj, filename):
@@ -28,14 +31,17 @@ advanced = advanced[advanced["lg"] == "NBA"].copy()
 teams    = teams[teams["lg"] == "NBA"].copy()
 teams_pg = teams_pg[teams_pg["lg"] == "NBA"].copy()
 
-# Remove mid-season trade duplicates — if a player has a "TOT" row (season total),
-# keep only that row and drop the individual team rows for that season
+# Remove mid-season trade duplicates. Basketball-Reference aggregate rows can be
+# labelled "TOT" or "2TM"/"3TM"; keep that season-total row and drop individual
+# team rows for the same player-season.
 def dedup_trades(df):
-    has_tot = df[df["team"] == "TOT"][["season", "player_id"]].drop_duplicates()
-    has_tot["_keep_tot"] = True
-    df = df.merge(has_tot, on=["season", "player_id"], how="left")
-    df = df[~((df["_keep_tot"] == True) & (df["team"] != "TOT"))]
-    df = df.drop(columns=["_keep_tot"])
+    df = df.copy()
+    df["_is_total_row"] = df["team"].astype(str).str.fullmatch(r"TOT|\d+TM")
+    has_total = df[df["_is_total_row"]][["season", "player_id"]].drop_duplicates()
+    has_total["_keep_total"] = True
+    df = df.merge(has_total, on=["season", "player_id"], how="left")
+    df = df[~((df["_keep_total"] == True) & ~df["_is_total_row"])]
+    df = df.drop(columns=["_keep_total", "_is_total_row"])
     return df
 
 per_game = dedup_trades(per_game)
@@ -262,6 +268,6 @@ save_json(act4_json, "act4_dynasties.json")
 print("\nDone! JSON files generated in js/:")
 for f in sorted(os.listdir(OUT_DIR)):
     if f.endswith(".json"):
-        size = os.path.getsize(f"{OUT_DIR}/{f}") // 1024
+        size = os.path.getsize(os.path.join(OUT_DIR, f)) // 1024
         print(f"   {f} ({size} KB)")
-print("\nNext step: open index.html in your browser.")
+print("\nNext step: open website/index.html in your browser.")

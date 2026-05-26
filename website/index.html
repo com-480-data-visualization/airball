@@ -99,7 +99,7 @@
     </div>
     <div class="creds-row">
       <span class="creds-label">Source</span>
-      <span>Basketball-Reference · 14,924 player-seasons · 1977–2026</span>
+      <span>Basketball-Reference · 19,833 qualified player-seasons · 1952–2026</span>
     </div>
     <div class="creds-row">
       <span class="creds-label">Stack</span>
@@ -179,7 +179,7 @@
 <section id="act2">
   <header class="act-header">
     <div class="act-eyebrow"><span class="act-num">II</span> Era Explorer</div>
-    <h2 class="act-title">Drag through <span class="accent-blue"><em>44 seasons.</em></span></h2>
+    <h2 class="act-title">Drag through <span class="accent-blue"><em>45 seasons.</em></span></h2>
     <p class="act-lede">Each bubble is a player-season among the league's top minutes-leaders. Size is minutes played; color is position; position on the chart shows how often they shot and how well they made shots count.</p>
   </header>
 
@@ -196,6 +196,9 @@
         <button class="pos-dot" data-pos="PF" onclick="togglePos('PF', this)"><span style="background:var(--pf)"></span>PF</button>
         <button class="pos-dot" data-pos="C" onclick="togglePos('C', this)"><span style="background:var(--c)"></span>C</button>
       </div>
+      <button class="trail-toggle" id="trail-toggle" onclick="toggleTrail()" aria-pressed="false" title="Show where each player was 3 seasons ago">
+        <span class="trail-icon" aria-hidden="true">···●</span> 3-year trails
+      </button>
       <div class="year-control">
         <button class="play-btn" id="play-btn" onclick="togglePlay()" aria-label="Play or pause year animation">
           <svg id="play-icon" width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
@@ -223,6 +226,29 @@
         <span>Star <span class="axis-arrow">→</span></span>
       </div>
     </div>
+
+    <div class="season-dna" id="season-dna" aria-live="polite">
+      <div class="dna-card">
+        <div class="dna-label">Usage king</div>
+        <div class="dna-name" id="dna-usage-name">—</div>
+        <div class="dna-stat" id="dna-usage-stat">—</div>
+      </div>
+      <div class="dna-card">
+        <div class="dna-label">Scoring leader</div>
+        <div class="dna-name" id="dna-scoring-name">—</div>
+        <div class="dna-stat" id="dna-scoring-stat">—</div>
+      </div>
+      <div class="dna-card">
+        <div class="dna-label">Efficiency peak</div>
+        <div class="dna-name" id="dna-eff-name">—</div>
+        <div class="dna-stat" id="dna-eff-stat">—</div>
+      </div>
+      <div class="dna-card dna-mix">
+        <div class="dna-label">Position mix</div>
+        <div class="pos-stack" id="dna-pos-stack"></div>
+        <div class="dna-stat" id="dna-pos-stat">—</div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -231,7 +257,7 @@
   <header class="act-header">
     <div class="act-eyebrow"><span class="act-num">III</span> Player vs Player</div>
     <h2 class="act-title">Any two careers, <span class="accent-green"><em>across any era.</em></span></h2>
-    <p class="act-lede">Pick any matchup — Jordan and Jokic, Magic and Curry, Kareem and Hakeem. Normalized mode ranks each player as a percentile against every NBA season since 1977, so a 30-point night in 1992 can sit honestly next to a 30-point night in 2024.</p>
+    <p class="act-lede">Pick any matchup — Jordan and Jokic, Magic and Curry, Kareem and Hakeem. Normalized mode ranks each player as a percentile against every NBA season since 1974, so a 30-point night in 1992 can sit honestly next to a 30-point night in 2024.</p>
   </header>
 
   <div class="act3-inner">
@@ -252,7 +278,7 @@
         <button class="toggle-btn active" onclick="setMode('normalized',this)" role="tab">Normalized</button>
         <button class="toggle-btn" onclick="setMode('raw',this)" role="tab">Raw stats</button>
       </div>
-      <div class="mode-explain" id="mode-explain">Percentile rank across all NBA history (1977 →). Bigger is better.</div>
+      <div class="mode-explain" id="mode-explain">Percentile rank across all NBA history (1974 →). Bigger is better.</div>
     </div>
 
     <div class="player-compare">
@@ -264,6 +290,7 @@
         </div>
         <div class="player-name-display" id="nameA">LeBron James</div>
         <div class="player-seasons" id="seasonsA"></div>
+        <div class="player-rings" id="ringsA"></div>
         <div id="statsA"></div>
       </div>
 
@@ -273,6 +300,11 @@
         <div class="radar-legend">
           <span class="lg-a" id="legend-a"><i></i> Player A</span>
           <span class="lg-b" id="legend-b"><i></i> Player B</span>
+        </div>
+        <div class="score-counter" id="score-counter">
+          <div class="sc-side sc-a"><span class="sc-num" id="sc-a-num">0</span><span class="sc-lbl" id="sc-a-lbl">A</span></div>
+          <div class="sc-sep">VS</div>
+          <div class="sc-side sc-b"><span class="sc-lbl" id="sc-b-lbl">B</span><span class="sc-num" id="sc-b-num">0</span></div>
         </div>
         <div class="verdict" id="verdict"></div>
       </div>
@@ -285,8 +317,14 @@
         </div>
         <div class="player-name-display" id="nameB">Michael Jordan</div>
         <div class="player-seasons" id="seasonsB"></div>
+        <div class="player-rings" id="ringsB"></div>
         <div id="statsB"></div>
       </div>
+    </div>
+
+    <div class="head-to-head">
+      <div class="h2h-eyebrow">Head-to-head · 8 metrics</div>
+      <div class="h2h-bars" id="h2h-bars"></div>
     </div>
   </div>
 </section>
@@ -295,7 +333,7 @@
 <section id="act4">
   <header class="act-header">
     <div class="act-eyebrow"><span class="act-num">IV</span> The Dynasties</div>
-    <h2 class="act-title">Six franchises, <span class="accent-gold"><em>twenty-eight rings.</em></span></h2>
+    <h2 class="act-title">Six franchises, <span class="accent-gold"><em>twenty-six rings.</em></span></h2>
     <p class="act-lede">Win percentage per season for the six teams that defined the modern NBA. Diamonds mark championship seasons. Click a team in the legend to focus on its arc.</p>
   </header>
 
@@ -333,7 +371,7 @@
       <ul>
         <li><a href="https://www.basketball-reference.com" target="_blank" rel="noopener">Basketball-Reference</a></li>
         <li><a href="https://www.kaggle.com/datasets/sumitrodatta/nba-aba-baa-stats" target="_blank" rel="noopener">Kaggle · NBA / ABA / BAA Stats</a></li>
-        <li>14,924 player-seasons · 1977–2026</li>
+        <li>19,833 qualified player-seasons · 1952–2026</li>
       </ul>
     </div>
     <div class="footer-col">
@@ -351,6 +389,9 @@
   </div>
 </footer>
 
-<script src="main.js"></script>
+<!-- ═══════ CONFETTI LAYER ═══════ -->
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<script src="main.js?v=engaging-m3"></script>
 </body>
 </html>

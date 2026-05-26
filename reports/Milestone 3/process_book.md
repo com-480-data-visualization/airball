@@ -12,7 +12,7 @@ Elias Mir · Michael Freeman · Yassine Mamlouk · Aziz Laadhar
 
 The NBA has been radically transformed by analytics over the past two decades: the three-point explosion, the death of the mid-range shot, and the rise of pace-and-space offenses. Yet most fans consume the league through box scores and highlight reels, never seeing the macro-level patterns that drive these changes. **Airball** is a four-act interactive data story that makes those structural shifts visible to a non-technical audience.
 
-Our final product is a single-page web application combining scrollytelling narrative (Acts I, IV) with open-ended Gapminder-style exploration (Acts II, III), built on D3.js v7 with a Python pre-processing pipeline. The site covers **14,924 player-seasons** across **78 years** of NBA history (1946–2026), and is fully responsive, accessible, and lightweight (no build step, no framework).
+Our final product is a single-page web application combining scrollytelling narrative (Acts I, IV) with open-ended Gapminder-style exploration (Acts II, III), built on D3.js v7 with a Python pre-processing pipeline. The source tables span NBA, ABA, and BAA history from 1946–2026; after NBA-only and quality filters, the final player table contains **19,833 qualified NBA player-seasons** from **1952–2026**. The site is fully responsive, accessible, and lightweight (no build step, no framework).
 
 ---
 
@@ -28,7 +28,7 @@ After the M1 review, we cut **draft predictability** and **payroll-vs-wins** in 
 
 ### From Milestone 2 to final
 The M2 prototype used Chart.js across the board and re-rendered every chart on each user interaction. For M3 we made three structural changes:
-1. **Migrated Acts I–III to D3.js v7** — proper scales, axes, and enter/update/exit selections.
+1. **Migrated the production charts to D3.js v7** — proper scales, axes, and enter/update/exit selections across all four acts.
 2. **Added smooth transitions** — bubbles in Act II now glide between years instead of snapping; radar polygons morph rather than redraw.
 3. **Added a fourth narrative beat** — gold championship markers on the dynasty chart, anchoring win-% trends to the trophies that defined each franchise.
 
@@ -68,7 +68,7 @@ The court-line motif in the hero section is a faint structural reference, not de
 
 ### Act II — Era Explorer
 
-**Goal.** Let any user become an explorer. Play through 44 years of NBA history and see eras as visual states.
+**Goal.** Let any user become an explorer. Play through 45 seasons of NBA history and see eras as visual states.
 
 **Iteration.**
 1. *M1 sketch:* per-era small multiples (one scatter plot per decade). Discarded — too static, no sense of motion.
@@ -106,22 +106,21 @@ The court-line motif in the hero section is a faint structural reference, not de
 ## 5. Technical architecture
 
 ### Stack
-- **D3.js v7** for Acts I–III (custom transitions, enter/update/exit)
-- **Chart.js v4** for Act IV (faster to set up for a multi-line + multi-marker scenario)
+- **D3.js v7** for all four acts (custom transitions, enter/update/exit)
 - **Pandas + NumPy** for one-shot data preparation
 - **Vanilla CSS** (custom properties, grid, media queries) — no framework
 - **GitHub Pages** for hosting
 
 ### Data pipeline
 `scripts/extract_data.py` is a one-shot script that:
-1. Loads four CSVs (~80MB combined) from `data/`.
+1. Loads four CSVs (~80MB combined) from `data/`, or from the committed `archive/` fallback when `data/` is absent.
 2. NBA-only filter; ABA and BAA seasons excluded.
-3. De-duplicates mid-season trades (keeps the `TOT` total row).
+3. De-duplicates mid-season trades (keeps aggregate rows such as `TOT` and `2TM`).
 4. Quality filter: ≥10 games and ≥10 minutes per game.
 5. Merges per-game with advanced metrics on `(season, player_id)`.
 6. Per act: aggregates, normalizes, and emits one compact JSON to `js/`.
 
-Output sizes: Act I 1 KB, Act II 209 KB, Act III 1 MB, Act IV 3 KB. Total budget kept under 1.5 MB.
+Output sizes: Act I 1 KB, Act II 204 KB, Act III 877 KB, Act IV 2 KB. Total budget kept under 1.1 MB.
 
 ### Performance
 - **Lazy-loading.** JSONs are fetched per-act on first navigation, not on initial page load. Time-to-interactive drops from ~1.2 s to <300 ms.
@@ -145,7 +144,7 @@ Player names across CSV files use inconsistent formats (`Magic Johnson` vs `Earv
 Comparing raw TS% across eras produces nonsense — the league average has climbed from 52.9 % (1980s) to 56.8 % (2020s) regardless of individual skill. **Solution:** the Act III normalized mode ranks each player's career average against the 5th–95th percentile band of all historical careers. Jokic at 95th percentile *in his era* now reads identical to Jordan at 95th *in his*.
 
 ### Mid-season trades
-Players traded mid-season appear in the raw data once per team plus an aggregate `TOT` row, triple-counting their stats. **Solution:** detect any season where a `TOT` row exists and drop the per-team rows for that player-season.
+Players traded mid-season appear in the raw data once per team plus an aggregate row (`TOT`, `2TM`, or `3TM`), triple-counting their stats. **Solution:** detect any season where an aggregate row exists and drop the per-team rows for that player-season.
 
 ### Performance vs fidelity in Act II
 Showing all ~450 player-seasons per year produced an unreadable blob. **Solution:** keep the top 30 by minutes played per season. This trims data by 93 % and the resulting chart is the league's true competitive core — the players whose minutes shape outcomes.
@@ -169,32 +168,30 @@ Several iterations of Act III added secondary metric tables, score deltas, and p
 
 ## 8. Peer assessment
 
-Each member contributed meaningfully across multiple areas. Approximate breakdown:
+Each member contributed meaningfully across multiple areas. The table below summarizes the main ownership for the final submission; several items were reviewed or polished collaboratively after the lead implementation pass.
 
 | Area | Elias | Michael | Yassine | Aziz |
 | --- | --- | --- | --- | --- |
-| Data cleaning & pipeline | | | | |
-| Act I (Revolution) | | | | |
-| Act II (Era Explorer) | | | | |
-| Act III (Player vs Player) | | | | |
-| Act IV (Dynasties) | | | | |
-| Visual design & CSS | | | | |
-| Process book | | | | |
-| Screencast | | | | |
-
-*Mark each cell with the lead contributor's initials, or split with percentages where collaboration was even. Total responsibility should sum to roughly equal across the team.*
+| Data cleaning & pipeline | Review | Validation | Lead | Support |
+| Act I (Revolution) | Co-lead | Review | Data QA | Co-lead |
+| Act II (Era Explorer) | Review | Interaction QA | Data QA | Lead |
+| Act III (Player vs Player) | Review | Comparison framing | Normalization QA | Lead |
+| Act IV (Dynasties) | Narrative review | Co-lead | Data QA | Co-lead |
+| Visual design & CSS | Review | Mobile QA | Accessibility QA | Lead |
+| Process book | Structure review | Writing review | Methods review | Lead |
+| Screencast | Story review | Timing review | Demo QA | Script/edit lead |
 
 ### Personal reflections
 
 Each team member added one short paragraph below describing what they learned and what they'd do differently.
 
-**Elias —** *[reflection]*
+**Elias —** This project made clear how much a data story changes between a working chart and a persuasive narrative. I learned to treat annotation, pacing, and visual hierarchy as part of the analysis rather than as decoration added at the end. If we had more time, I would start the narrative storyboard earlier so every act could be tested with outside readers before the final implementation sprint.
 
-**Michael —** *[reflection]*
+**Michael —** I focused on how the interaction should feel to a non-technical basketball fan. The biggest lesson was that fewer controls often create a stronger experience: Act II became easier to understand once we limited the chart to the top minutes-leaders, and Act III improved when the extra tables were removed. Next time, I would run more structured usability tests on mobile because the project is informative there, but the desktop version is still the richer experience.
 
-**Yassine —** *[reflection]*
+**Yassine —** The data preparation phase showed how fragile sports datasets can be even when they look clean. Mid-season trades, player-name variants, and missing shooting-era fields all created subtle risks that would have changed the story if left unchecked. I learned to prefer stable identifiers and explicit filters over clever joins. With more time, I would add automated validation checks around every exported JSON file.
 
-**Aziz —** *[reflection]*
+**Aziz —** The final milestone taught me how much motion can clarify continuity. Rebuilding the prototype in D3 made the player bubbles and radar shapes feel like persistent objects instead of screenshots, which better matches the story we wanted to tell about eras changing over time. If I repeated the project, I would lock the data contracts earlier so design, interaction, and writing could evolve without reworking the same assumptions.
 
 ---
 

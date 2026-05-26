@@ -2,7 +2,7 @@
 
 **An interactive data story about the NBA's structural transformation, 1946–2026.**
 
-[**▶ Live site**](https://com-480-data-visualization.github.io/airball/website/index.html) · [Process book](./reports/Milestone%203/process_book.pdf) *(coming soon)* · [Screencast](#) *(coming soon)*
+[**▶ Live site**](https://com-480-data-visualization.github.io/airball/website/index.html) · [Process book](./reports/Milestone%203/process_book.pdf) · [Screencast script](./reports/Milestone%203/screencast_script.md)
 
 COM-480 Data Visualization Project · EPFL · Spring 2026
 
@@ -20,7 +20,7 @@ COM-480 Data Visualization Project · EPFL · Spring 2026
 Most fans see the NBA through box scores and highlight reels — they never see the macro-level patterns that have reshaped the game. **Airball** is a four-act scrollytelling experience that makes those structural shifts visible:
 
 1. **Act I — The Revolution.** The 3-point shot's journey from gimmick to system, 1980–2026.
-2. **Act II — Era Explorer.** Every player-season as a bubble. Drag through 44 years of NBA history.
+2. **Act II — Era Explorer.** Every player-season as a bubble. Drag through 45 seasons of NBA history.
 3. **Act III — Player vs Player.** Era-normalized radar comparisons — Jordan vs Jokic, fairly.
 4. **Act IV — Dynasties.** Six franchises that defined modern basketball, with championship markers.
 
@@ -36,7 +36,7 @@ The site is a static SPA. No build step, no framework, no bundler. Just open `we
 
 | Layer | Tool |
 | --- | --- |
-| Visualization | **D3.js v7** (Acts 1–3) + **Chart.js v4** (Act 4) |
+| Visualization | **D3.js v7** (all four acts) |
 | Styling | Hand-written CSS (custom properties, CSS grid, media queries) |
 | Data prep | **pandas** + **numpy** (Python, one-shot script) |
 | Hosting | GitHub Pages |
@@ -62,6 +62,7 @@ If you want to re-run the data pipeline from raw CSVs:
 # 1. Download the source dataset from Kaggle
 #    https://www.kaggle.com/datasets/sumitrodatta/nba-aba-baa-stats
 #    Place all CSV files inside a `data/` folder at the repo root.
+#    If `data/` is absent, the script falls back to the committed `archive/` folder.
 
 # 2. Install Python deps
 pip install pandas numpy
@@ -83,7 +84,7 @@ airball/
 ├── README.md
 ├── website/
 │   ├── index.html          # SPA shell with four acts
-│   ├── main.js             # D3 charts, lazy-loaded data, Chart.js for Act 4
+│   ├── main.js             # D3 charts + lazy-loaded data
 │   └── styles.css          # All styles incl. responsive + a11y
 ├── js/                     # Pre-computed JSON, one per act
 │   ├── act1_revolution.json
@@ -115,7 +116,7 @@ The site is fully responsive (down to ~360px wide) and respects `prefers-reduced
 
 **Primary source.** [NBA / ABA / BAA Stats](https://www.kaggle.com/datasets/sumitrodatta/nba-aba-baa-stats) on Kaggle — itself scraped from [Basketball-Reference](https://www.basketball-reference.com). Covers 1946–2026 across player per-game, advanced metrics, team summaries, and shooting splits.
 
-**Pre-processing.** NBA-only filter; mid-season trade dedup (keep `TOT` totals); ≥10 games and ≥10 mpg threshold; per-game ⨝ advanced on `(season, player_id)`; weighted-mean career aggregation; percentile normalization at the 5th–95th range.
+**Pre-processing.** NBA-only filter; mid-season trade dedup (keep `TOT` / `2TM` aggregate rows); ≥10 games and ≥10 mpg threshold; per-game ⨝ advanced on `(season, player_id)`; weighted-mean career aggregation; percentile normalization at the 5th–95th range.
 
 **Limitations.** Three-point data starts in 1979–80, shot-distance data in 1996–97. Salary data not currently used.
 
