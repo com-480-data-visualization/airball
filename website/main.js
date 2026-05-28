@@ -116,6 +116,346 @@ async function showSection(id) {
 }
 
 // =============================================================================
+// STORY MODE — curated walkthrough that drives the existing charts
+// =============================================================================
+const STORY_STOPS = [
+  {
+    section: 'act1',
+    step: 0,
+    metric: 'x3pa',
+    callout: { season: 1980, label: '2.8 3PA', detail: 'new line, tiny usage', dx: 72, dy: -62 },
+    kicker: 'Act I · 1980',
+    title: 'The line appears',
+    copy: 'The NBA adds a shot that coaches barely trust. Teams take fewer than three threes a game, so the orange line almost hugs the floor.',
+    context: '1980 adoption · 2.8 threes per team game',
+  },
+  {
+    section: 'act1',
+    step: 3,
+    metric: 'x3pa',
+    callout: { season: 2016, label: 'Warriors gravity', detail: 'the curve bends upward', dx: -205, dy: -72 },
+    kicker: 'Act I · 2016',
+    title: 'The experiment becomes a system',
+    copy: 'By the Warriors peak, the three is no longer a trick shot. Spacing has become the offense, and the curve starts climbing like it found another gear.',
+    context: 'Curry era · line acceleration',
+  },
+  {
+    section: 'act2',
+    year: 1996,
+    highlight: 'Michael Jordan',
+    trail: false,
+    callout: { label: 'Jordan 1996', detail: 'high usage, compact era', dx: -200, dy: -84 },
+    kicker: 'Act II · 1996',
+    title: 'The old map still had one sun',
+    copy: 'Jordan sits in a compact, physical league: less three-point gravity, more mid-range control, and one scorer pulling the whole defense toward him.',
+    context: 'Jordan decade · highlighted player-season',
+  },
+  {
+    section: 'act2',
+    year: 2016,
+    highlight: 'Stephen Curry',
+    trail: true,
+    callout: { label: 'Curry 2016', detail: 'usage and efficiency together', dx: -205, dy: -92 },
+    kicker: 'Act II · 2016',
+    title: 'Spacing bends the player cloud',
+    copy: 'With trails on, Curry shows the sport moving up and right: higher efficiency without giving up star-level usage. The modern map starts to look different.',
+    context: 'Warriors dynasty · three-year trails',
+  },
+  {
+    section: 'act3',
+    matchup: ['Stephen Curry', 'Kobe Bryant'],
+    mode: 'normalized',
+    callout: { label: 'Normalized lens', detail: 'percentiles make the eras comparable' },
+    kicker: 'Act III · Curry vs Kobe',
+    title: 'Era debate without time travel',
+    copy: 'Normalized mode turns the question from raw totals into era-relative dominance. Two different offensive ecosystems can meet on one scale.',
+    context: 'Percentile ranks across all NBA seasons since 1974',
+  },
+  {
+    section: 'act4',
+    teams: ['Bulls', 'Warriors', 'Celtics'],
+    callout: { team: 'Warriors', season: 2016, label: 'Three dynasty shapes', detail: 'spike, arc, bookend', dx: -215, dy: -92 },
+    kicker: 'Act IV · 1990-2026',
+    title: 'Dynasties leave different footprints',
+    copy: 'The Bulls spike like a comet, the Warriors stretch into a modern arc, and Boston bookends the period. Rings are outcomes; the lines show how long the machine stayed sharp.',
+    context: 'Focused dynasty arcs · 12 combined titles',
+  },
+  {
+    section: 'hero',
+    callout: { season: 2026, label: '13x growth', detail: 'one line rewired the sport', dx: -190, dy: -84 },
+    kicker: 'Final takeaway',
+    title: 'The sport changed what greatness looks like',
+    copy: 'The NBA did not just shoot more threes. It changed spacing, efficiency, roster value, and the shape of a star season.',
+    context: 'Use Explore to keep the current view, or Restart the tour.',
+  },
+];
+
+let storyActive = false;
+let storyIndex = 0;
+let storyChartContexts = {
+  hero: null,
+  act1: null,
+  act2: null,
+  act4: null,
+};
+
+async function startStoryMode(index = 0) {
+  storyActive = true;
+  await goToStoryStop(index);
+}
+
+function closeStoryMode() {
+  storyActive = false;
+  clearStoryAnnotations();
+  renderStoryPanel();
+}
+
+function exploreCurrentStoryView() {
+  closeStoryMode();
+}
+
+async function storyNext() {
+  const next = storyIndex >= STORY_STOPS.length - 1 ? 0 : storyIndex + 1;
+  await goToStoryStop(next);
+}
+
+async function storyPrev() {
+  if (storyIndex <= 0) return;
+  await goToStoryStop(storyIndex - 1);
+}
+
+async function goToStoryStop(index) {
+  storyIndex = Math.max(0, Math.min(STORY_STOPS.length - 1, index));
+  storyActive = true;
+  renderStoryPanel();
+  const stop = STORY_STOPS[storyIndex];
+  await showSection(stop.section);
+  applyStoryState(stop);
+  renderStoryPanel();
+  renderStoryAnnotations(stop);
+  focusStoryViewport(stop);
+}
+
+function renderStoryPanel() {
+  const panel = document.getElementById('story-panel');
+  const launch = document.getElementById('story-launch');
+  const nav = document.getElementById('nav-story');
+  if (!panel) return;
+
+  document.body.classList.toggle('story-on', storyActive);
+  panel.setAttribute('aria-hidden', storyActive ? 'false' : 'true');
+  launch?.classList.toggle('active', storyActive);
+  nav?.classList.toggle('active', storyActive);
+  if (!storyActive) {
+    document.body.removeAttribute('data-story-section');
+    return;
+  }
+
+  const stop = STORY_STOPS[storyIndex];
+  const total = STORY_STOPS.length;
+  document.body.dataset.storySection = stop.section;
+  document.getElementById('story-count').textContent = `${String(storyIndex + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
+  document.getElementById('story-kicker').textContent = stop.kicker;
+  document.getElementById('story-title').textContent = stop.title;
+  document.getElementById('story-copy').textContent = stop.copy;
+  document.getElementById('story-context').textContent = stop.context;
+  document.getElementById('story-progress-fill').style.width = `${((storyIndex + 1) / total) * 100}%`;
+
+  const dots = document.getElementById('story-dots');
+  dots.innerHTML = STORY_STOPS.map((s, i) => `
+    <button class="${i === storyIndex ? 'active' : ''}" onclick="goToStoryStop(${i})" aria-label="Story stop ${i + 1}: ${s.title}"></button>
+  `).join('');
+
+  const prev = document.getElementById('story-prev');
+  const next = document.getElementById('story-next');
+  prev.disabled = storyIndex === 0;
+  next.textContent = storyIndex === total - 1 ? 'Restart' : 'Next';
+  panel.classList.remove('pulse');
+  void panel.offsetWidth;
+  panel.classList.add('pulse');
+}
+
+function applyStoryState(stop) {
+  if (stop.section === 'act1') {
+    if (stop.metric) {
+      const btn = document.querySelector(`.chart-tab[data-metric="${stop.metric}"]`);
+      if (btn) act1SetMetric(stop.metric, btn);
+    }
+    if (Number.isInteger(stop.step)) {
+      const block = document.querySelectorAll('.story-block')[stop.step];
+      if (block) act1Go(stop.step, block);
+    }
+  }
+
+  if (stop.section === 'act2') {
+    resetPositionFilters();
+    if (stop.year) setAct2Year(stop.year, false);
+    setAct2Highlight(stop.highlight || '', false);
+    if (typeof stop.trail === 'boolean') setTrailMode(stop.trail, false);
+    drawAct2();
+  }
+
+  if (stop.section === 'act3') {
+    if (stop.matchup) {
+      const [a, b] = stop.matchup;
+      const quickpick = Array.from(document.querySelectorAll('.qp')).find(q => q.dataset.a === a && q.dataset.b === b);
+      pickMatchup(a, b, quickpick || null);
+    }
+    if (stop.mode) {
+      const btn = document.querySelector(`.toggle-btn[onclick="setMode('${stop.mode}',this)"]`);
+      setMode(stop.mode, btn);
+    }
+  }
+
+  if (stop.section === 'act4' && stop.teams) {
+    setDynastyFocus(stop.teams);
+  }
+}
+
+function focusStoryViewport(stop) {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const behavior = reduce ? 'auto' : 'smooth';
+  const target = stop.section === 'act2' ? document.querySelector('.bubble-chart-wrap')
+              : stop.section === 'act3' ? document.querySelector('.radar-center')
+              : stop.section === 'act4' ? document.querySelector('.chart-wrap-4')
+              : null;
+  if (!target) return;
+  setTimeout(() => target.scrollIntoView({ block: 'center', behavior }), 80);
+}
+
+function clearStoryAnnotations() {
+  d3.selectAll('.story-chart-callout').remove();
+  document.querySelectorAll('.story-result-callout').forEach(el => el.remove());
+}
+
+function renderStoryAnnotations(stop = STORY_STOPS[storyIndex]) {
+  clearStoryAnnotations();
+  if (!storyActive || !stop?.callout) return;
+  if (stop.section === 'hero') renderHeroStoryCallout(stop);
+  if (stop.section === 'act1') renderAct1StoryCallout(stop);
+  if (stop.section === 'act2') renderAct2StoryCallout(stop);
+  if (stop.section === 'act3') renderAct3StoryCallout(stop);
+  if (stop.section === 'act4') renderAct4StoryCallout(stop);
+}
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function drawSvgStoryCallout(ctx, x, y, opts) {
+  if (!ctx?.root) return;
+  const width = opts.width || 178;
+  const height = opts.detail ? 58 : 40;
+  const boxX = clamp(x + (opts.dx ?? 72), 8, Math.max(8, ctx.iw - width - 8));
+  const boxY = clamp(y + (opts.dy ?? -72), 8, Math.max(8, ctx.ih - height - 8));
+  const lineX = x < boxX ? boxX : boxX + width;
+  const lineY = boxY + height / 2;
+  const g = ctx.root.append('g')
+    .attr('class', 'story-chart-callout')
+    .style('opacity', 0)
+    .style('pointer-events', 'none');
+
+  g.append('line')
+    .attr('class', 'story-callout-line')
+    .attr('x1', x).attr('y1', y)
+    .attr('x2', lineX).attr('y2', lineY);
+  g.append('circle')
+    .attr('class', 'story-callout-halo')
+    .attr('cx', x).attr('cy', y).attr('r', 10);
+  g.append('circle')
+    .attr('class', 'story-callout-dot')
+    .attr('cx', x).attr('cy', y).attr('r', 4);
+
+  const box = g.append('g').attr('transform', `translate(${boxX},${boxY})`);
+  box.append('rect')
+    .attr('class', 'story-callout-bg')
+    .attr('width', width).attr('height', height)
+    .attr('rx', 7);
+  box.append('text')
+    .attr('class', 'story-callout-title')
+    .attr('x', 12).attr('y', opts.detail ? 22 : 25)
+    .text(opts.label);
+  if (opts.detail) {
+    box.append('text')
+      .attr('class', 'story-callout-detail')
+      .attr('x', 12).attr('y', 42)
+      .text(opts.detail);
+  }
+
+  g.transition().delay(220).duration(420).ease(d3.easeCubicOut).style('opacity', 1);
+}
+
+function renderHeroStoryCallout(stop) {
+  const ctx = storyChartContexts.hero;
+  const d = DATA.act1;
+  if (!ctx || !d) return;
+  const season = stop.callout.season;
+  const idx = d.seasons.indexOf(season);
+  if (idx < 0) return;
+  drawSvgStoryCallout(ctx, ctx.x(season), ctx.y(d.x3pa[idx]), stop.callout);
+}
+
+function renderAct1StoryCallout(stop) {
+  const ctx = storyChartContexts.act1;
+  const d = DATA.act1;
+  if (!ctx || !d || act1Metric !== 'x3pa') return;
+  const season = stop.callout.season;
+  const idx = d.seasons.indexOf(season);
+  if (idx < 0) return;
+  drawSvgStoryCallout(ctx, ctx.x(season), ctx.y(d.x3pa[idx]), stop.callout);
+}
+
+function renderAct2StoryCallout(stop) {
+  const ctx = storyChartContexts.act2;
+  if (!ctx) return;
+  const player = ctx.players.find(p => p.player.toLowerCase().includes((stop.highlight || '').toLowerCase()));
+  if (!player) return;
+  drawSvgStoryCallout(ctx, ctx.x(player.usg_percent), ctx.y(player.ts_percent), stop.callout);
+}
+
+function renderAct3StoryCallout(stop) {
+  const host = document.querySelector('.radar-center');
+  if (!host) return;
+  const el = document.createElement('div');
+  el.className = 'story-result-callout';
+  const verdict = document.getElementById('verdict')?.textContent || '';
+  el.innerHTML = `
+    <div class="story-result-label">${stop.callout.label}</div>
+    <div class="story-result-detail">${stop.callout.detail}</div>
+    <div class="story-result-verdict">${verdict}</div>
+  `;
+  host.appendChild(el);
+}
+
+function renderAct4StoryCallout(stop) {
+  const ctx = storyChartContexts.act4;
+  if (!ctx) return;
+  const [teamName, teamData] = ctx.teams.find(([name]) => name === stop.callout.team) || [];
+  if (!teamName || !teamData) return;
+  const idx = teamData.seasons.indexOf(stop.callout.season);
+  if (idx < 0) return;
+  drawSvgStoryCallout(ctx, ctx.x(stop.callout.season), ctx.y(teamData.wins[idx]), stop.callout);
+}
+
+document.addEventListener('keydown', e => {
+  if (!storyActive) return;
+  const tag = e.target?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    storyNext();
+  }
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    storyPrev();
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    exploreCurrentStoryView();
+  }
+});
+
+// =============================================================================
 // SCROLL PROGRESS
 // =============================================================================
 function updateProgress() {
@@ -177,6 +517,7 @@ function drawHeroChart() {
   const x = d3.scaleLinear().domain(d3.extent(d.seasons)).range([0, iw]);
   const y = d3.scaleLinear().domain([0, d3.max(d.x3pa) * 1.08]).range([ih, 0]);
   const data = d.seasons.map((s, i) => ({ s, v: d.x3pa[i] }));
+  storyChartContexts.hero = { root, x, y, iw, ih, data };
   heroScrubDataCache = { data, x, y, iw, ih, m, W, H };
 
   const line = d3.line().x(p => x(p.s)).y(p => y(p.v)).curve(d3.curveMonotoneX);
@@ -343,7 +684,7 @@ const ACT1_METRIC_FMT = {
 function act1Go(step, el) {
   act1Step = step;
   document.querySelectorAll('.story-block').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
+  if (el) el.classList.add('active');
   if (DATA.act1) drawAct1(step);
   if (DATA.act1) drawSmallMults();
 }
@@ -379,6 +720,7 @@ function drawAct1(step) {
             : act1Metric === 'pace' ? Math.min(86, d3.min(series) - 1)
             : 0;
   const y = d3.scaleLinear().domain([yMin, yMax]).range([ih, 0]).nice();
+  storyChartContexts.act1 = { root, x, y, iw, ih, data, series };
 
   const line = d3.line().x(p => x(p.s)).y(p => y(p.v)).curve(d3.curveMonotoneX);
   const area = d3.area().x(p => x(p.s)).y0(ih).y1(p => y(p.v)).curve(d3.curveMonotoneX);
@@ -538,11 +880,17 @@ let mutedPos = new Set();
 let trailMode = false;
 
 function toggleTrail() {
-  trailMode = !trailMode;
+  setTrailMode(!trailMode);
+}
+
+function setTrailMode(enabled, redraw = true) {
+  trailMode = enabled;
   const btn = document.getElementById('trail-toggle');
-  btn.classList.toggle('active', trailMode);
-  btn.setAttribute('aria-pressed', trailMode);
-  drawAct2();
+  if (btn) {
+    btn.classList.toggle('active', trailMode);
+    btn.setAttribute('aria-pressed', String(trailMode));
+  }
+  if (redraw) drawAct2();
 }
 
 function eraNameForYear(y) {
@@ -557,8 +905,7 @@ function eraNameForYear(y) {
 }
 
 function highlightPlayer(val) {
-  highlightName = (val || '').toLowerCase().trim();
-  drawAct2();
+  setAct2Highlight(val);
 }
 
 function togglePos(pos, el) {
@@ -568,10 +915,31 @@ function togglePos(pos, el) {
 }
 
 function updateYear(val) {
-  currentYear = parseInt(val);
-  document.getElementById('year-display').textContent = currentYear;
-  document.getElementById('era-watermark').textContent = eraNameForYear(currentYear);
-  drawAct2();
+  setAct2Year(val);
+}
+
+function setAct2Year(val, redraw = true) {
+  currentYear = parseInt(val, 10);
+  const slider = document.getElementById('year-slider');
+  const display = document.getElementById('year-display');
+  const watermark = document.getElementById('era-watermark');
+  if (slider) slider.value = currentYear;
+  if (display) display.textContent = currentYear;
+  if (watermark) watermark.textContent = eraNameForYear(currentYear);
+  if (redraw) drawAct2();
+}
+
+function setAct2Highlight(val, redraw = true) {
+  const clean = val || '';
+  highlightName = clean.toLowerCase().trim();
+  const search = document.getElementById('search2');
+  if (search) search.value = clean;
+  if (redraw) drawAct2();
+}
+
+function resetPositionFilters() {
+  mutedPos.clear();
+  document.querySelectorAll('.pos-dot').forEach(el => el.classList.remove('muted'));
 }
 
 function togglePlay() {
@@ -583,10 +951,7 @@ function togglePlay() {
     icon.innerHTML = '<rect x="3" y="2" width="3" height="10" fill="currentColor"/><rect x="8" y="2" width="3" height="10" fill="currentColor"/>';
     playInterval = setInterval(() => {
       currentYear = currentYear >= 2026 ? 1982 : currentYear + 1;
-      document.getElementById('year-slider').value = currentYear;
-      document.getElementById('year-display').textContent = currentYear;
-      document.getElementById('era-watermark').textContent = eraNameForYear(currentYear);
-      drawAct2();
+      setAct2Year(currentYear);
     }, 480);
   } else {
     btn.setAttribute('aria-label', 'Play');
@@ -679,6 +1044,7 @@ function drawAct2() {
 
   // Bubbles
   const keyed = players.map(p => ({ ...p, _key: p.player + ':' + p.pos }));
+  storyChartContexts.act2 = { root, x, y, iw, ih, players: keyed };
 
   // ✨ TRAIL MODE — ghost bubbles at where each player was 3 years ago
   const trailGroup = root.select('g.trails');
@@ -784,6 +1150,8 @@ function updateSeasonDNA(players) {
 // ACT 3 — Player vs Player
 // =============================================================================
 let playerA = null, playerB = null, radarMode = 'normalized';
+let similarityAnchorSlot = 'A';
+let similaritySimulation = null;
 const METRICS = ['pts_per_game', 'trb_per_game', 'ast_per_game', 'ts_percent', 'ws_48', 'bpm', 'vorp', 'per'];
 const STAT_LABELS = ['Points / game', 'Rebounds / game', 'Assists / game', 'True Shooting %', 'Win Shares / 48', 'Box +/-', 'VORP', 'PER'];
 const LABELS = ['PTS', 'REB', 'AST', 'TS%', 'WS/48', 'BPM', 'VORP', 'PER'];
@@ -820,7 +1188,7 @@ const PLAYER_RINGS = {
 let act3Initialized = false;
 function initAct3Defaults() {
   if (!DATA.act3) return;
-  if (act3Initialized) { drawRadar(); drawHeadToHead(); return; }
+  if (act3Initialized) { drawRadar(); drawHeadToHead(); drawSimilarityGraph(); return; }
   const s = DATA.act3.search;
   const lb = s.find(p => p.name === 'LeBron James');
   const mj = s.find(p => p.name === 'Michael Jordan');
@@ -830,6 +1198,7 @@ function initAct3Defaults() {
   const def = document.querySelector('.qp[data-a="LeBron James"]');
   if (def) def.classList.add('active');
   act3Initialized = true;
+  drawSimilarityGraph();
 }
 
 function searchPlayer(slot, query) {
@@ -884,6 +1253,7 @@ function selectAct3Player(slot, pid) {
   drawRadar();
   updateVerdict();
   drawHeadToHead();
+  drawSimilarityGraph();
 }
 
 function renderRings(slot) {
@@ -923,7 +1293,7 @@ function renderStatTables() {
 function setMode(mode, btn) {
   radarMode = mode;
   document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
   document.getElementById('radar-mode-label').innerHTML =
     mode === 'normalized' ? 'Normalized<br>career stats' : 'Raw career<br>stats';
   document.getElementById('mode-explain').textContent =
@@ -933,6 +1303,7 @@ function setMode(mode, btn) {
   drawRadar();
   updateVerdict();
   drawHeadToHead();
+  drawSimilarityGraph();
 }
 
 function updateVerdict() {
@@ -1101,6 +1472,249 @@ function drawRadar() {
   drawDots('g.dots-b', valsB, 'var(--accent)', 'B');
 }
 
+function setSimilarityAnchor(slot, btn) {
+  similarityAnchorSlot = slot === 'B' ? 'B' : 'A';
+  document.querySelectorAll('.sim-anchor').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  else document.getElementById('sim-anchor-' + similarityAnchorSlot.toLowerCase())?.classList.add('active');
+  drawSimilarityGraph();
+}
+
+function playerVector(player) {
+  return METRICS.map(m => player?.normalized?.[m] || 0);
+}
+
+function vectorDistance(a, b) {
+  return Math.sqrt(a.reduce((sum, v, i) => sum + Math.pow(v - b[i], 2), 0));
+}
+
+function playerImpactScore(player) {
+  const vals = playerVector(player);
+  return d3.mean(vals) || 0;
+}
+
+function playerEra(player) {
+  const seasons = player.seasons || [];
+  const mid = d3.mean(seasons) || 2000;
+  if (mid < 1988) return 'classic';
+  if (mid < 2003) return 'iso';
+  if (mid < 2015) return 'bridge';
+  return 'spacing';
+}
+
+function buildSimilarityGraphData() {
+  if (!DATA.act3 || !playerA || !playerB) return { nodes: [], links: [], nearest: null };
+  const players = Object.entries(DATA.act3.players)
+    .map(([id, p]) => ({
+      id,
+      ...p,
+      vec: playerVector(p),
+      score: playerImpactScore(p),
+      era: playerEra(p),
+      seasonsLine: (p.seasons || []).length ? `${p.seasons[0]}-${p.seasons[p.seasons.length - 1]}` : '',
+    }))
+    .filter(p => (p.seasons || []).length >= 5);
+
+  const anchor = similarityAnchorSlot === 'B' ? playerB : playerA;
+  const anchorId = anchor?.id;
+  const oppositeId = similarityAnchorSlot === 'B' ? playerA?.id : playerB?.id;
+  const anchorVec = playerVector(anchor);
+
+  const topPlayers = [...players]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 58);
+  const nearestPlayers = [...players]
+    .filter(p => p.id !== anchorId)
+    .map(p => ({ ...p, anchorDist: vectorDistance(anchorVec, p.vec) }))
+    .sort((a, b) => a.anchorDist - b.anchorDist)
+    .slice(0, 30);
+
+  const byId = new Map();
+  [...topPlayers, ...nearestPlayers].forEach(p => byId.set(p.id, p));
+  [playerA, playerB].forEach(p => {
+    if (!p) return;
+    byId.set(p.id, {
+      ...p,
+      vec: playerVector(p),
+      score: playerImpactScore(p),
+      era: playerEra(p),
+      seasonsLine: p.seasonsLine || ((p.seasons || []).length ? `${p.seasons[0]}-${p.seasons[p.seasons.length - 1]}` : ''),
+    });
+  });
+
+  const nodes = Array.from(byId.values()).map(p => {
+    const score = p.score || playerImpactScore(p);
+    const ast = p.normalized?.ast_per_game || 0;
+    const reb = p.normalized?.trb_per_game || 0;
+    const skillX = clamp((ast - reb + 100) / 200, 0, 1);
+    return {
+      ...p,
+      score,
+      isA: p.id === playerA?.id,
+      isB: p.id === playerB?.id,
+      isAnchor: p.id === anchorId,
+      isOpposite: p.id === oppositeId,
+      r: p.id === anchorId ? 15 : p.id === oppositeId ? 13 : 5 + score / 13,
+      seedX: 140 + skillX * 720,
+      seedY: 72 + (1 - clamp(score / 100, 0, 1)) * 390,
+    };
+  });
+
+  const linkMap = new Map();
+  nodes.forEach(a => {
+    [...nodes]
+      .filter(b => b.id !== a.id)
+      .map(b => ({ target: b, dist: vectorDistance(a.vec, b.vec) }))
+      .sort((x, y) => x.dist - y.dist)
+      .slice(0, a.isAnchor ? 8 : 3)
+      .forEach(({ target, dist }) => {
+        if (dist > 96 && !a.isAnchor) return;
+        const key = [a.id, target.id].sort().join('|');
+        if (!linkMap.has(key)) {
+          linkMap.set(key, {
+            source: a.id,
+            target: target.id,
+            dist,
+            anchor: a.isAnchor || target.isAnchor,
+            similarity: Math.max(0, 1 - dist / Math.sqrt(METRICS.length * 10000)),
+          });
+        }
+      });
+  });
+
+  const nearest = nodes
+    .filter(n => n.id !== anchorId)
+    .map(n => ({ ...n, anchorDist: vectorDistance(anchorVec, n.vec) }))
+    .sort((a, b) => a.anchorDist - b.anchorDist)[0] || null;
+
+  return { nodes, links: Array.from(linkMap.values()), nearest };
+}
+
+function drawSimilarityGraph() {
+  const svg = d3.select('#similarity-graph');
+  if (!svg.node() || !DATA.act3 || !playerA || !playerB) return;
+  if (similaritySimulation) similaritySimulation.stop();
+  svg.selectAll('*').remove();
+
+  const { nodes, links, nearest } = buildSimilarityGraphData();
+  if (!nodes.length) return;
+
+  const W = 1000, H = 560;
+  const posColor = p => posColors[p] || 'var(--muted)';
+  const anchor = similarityAnchorSlot === 'B' ? playerB : playerA;
+  const compareSlot = similarityAnchorSlot === 'B' ? 'A' : 'B';
+  const cardName = document.getElementById('sim-card-name');
+  const cardMeta = document.getElementById('sim-card-meta');
+  if (cardName && cardMeta) {
+    cardName.textContent = nearest ? nearest.name : '—';
+    cardMeta.textContent = nearest ? `${nearest.pos} · ${Math.round((1 - nearest.anchorDist / Math.sqrt(METRICS.length * 10000)) * 100)}% similar to ${anchor.name.split(' ').slice(-1)[0]}` : '—';
+  }
+
+  const root = svg.append('g').attr('class', 'sim-root');
+  const defs = svg.append('defs');
+  const glow = defs.append('filter').attr('id', 'sim-glow').attr('x', '-60%').attr('y', '-60%').attr('width', '220%').attr('height', '220%');
+  glow.append('feGaussianBlur').attr('stdDeviation', '3.2').attr('result', 'blur');
+  const merge = glow.append('feMerge');
+  merge.append('feMergeNode').attr('in', 'blur');
+  merge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  root.append('text')
+    .attr('class', 'sim-axis-label sim-axis-left')
+    .attr('x', 44).attr('y', H - 28)
+    .text('Interior profile');
+  root.append('text')
+    .attr('class', 'sim-axis-label sim-axis-right')
+    .attr('x', W - 44).attr('y', H - 28)
+    .attr('text-anchor', 'end')
+    .text('Creator profile');
+  root.append('text')
+    .attr('class', 'sim-axis-label')
+    .attr('x', W / 2).attr('y', 34)
+    .attr('text-anchor', 'middle')
+    .text('Higher career impact');
+
+  const link = root.append('g')
+    .attr('class', 'sim-links')
+    .selectAll('line')
+    .data(links)
+    .join('line')
+    .attr('class', d => d.anchor ? 'sim-link anchor' : 'sim-link')
+    .attr('stroke-width', d => d.anchor ? 1.7 : 0.8)
+    .style('opacity', d => d.anchor ? 0.5 : 0.12);
+
+  const node = root.append('g')
+    .attr('class', 'sim-nodes')
+    .selectAll('circle')
+    .data(nodes, d => d.id)
+    .join('circle')
+    .attr('class', d => [
+      'sim-node',
+      d.isAnchor ? 'anchor' : '',
+      d.isOpposite ? 'opposite' : '',
+      d.isA ? 'player-a-node' : '',
+      d.isB ? 'player-b-node' : '',
+    ].filter(Boolean).join(' '))
+    .attr('r', d => d.r)
+    .attr('fill', d => posColor(d.pos))
+    .attr('stroke', d => d.isAnchor ? '#f5c518' : d.isA ? '#4d8dff' : d.isB ? '#ff6b1a' : 'rgba(255,255,255,0.18)')
+    .attr('stroke-width', d => d.isAnchor ? 3 : (d.isA || d.isB) ? 2.4 : 1)
+    .style('filter', d => d.isAnchor ? 'url(#sim-glow)' : null)
+    .style('cursor', 'pointer')
+    .on('mouseenter', function (e, d) {
+      const simToAnchor = Math.max(0, 1 - vectorDistance(playerVector(anchor), d.vec) / Math.sqrt(METRICS.length * 10000));
+      d3.select(this).raise().transition().duration(120).attr('r', d.r + 4);
+      showTip(d.name, `${d.pos} · ${d.seasonsLine}<br>${Math.round(d.score)} impact · ${Math.round(simToAnchor * 100)}% similar to ${anchor.name.split(' ').slice(-1)[0]}`, 'green');
+      link.style('opacity', l => (l.source.id === d.id || l.target.id === d.id) ? 0.62 : (l.anchor ? 0.28 : 0.06));
+    })
+    .on('mouseleave', function (e, d) {
+      d3.select(this).transition().duration(120).attr('r', d.r);
+      hideTip();
+      link.style('opacity', l => l.anchor ? 0.5 : 0.12);
+    })
+    .on('click', (e, d) => {
+      if (d.id === anchor.id) return;
+      selectAct3Player(compareSlot, d.id);
+      fireConfetti(e.clientX, e.clientY, { count: 18, colors: [posColor(d.pos), '#f5c518', '#ffffff'] });
+    });
+
+  const labelNodes = nodes.filter(d => d.isA || d.isB || d.isAnchor || d.score > 91).slice(0, 18);
+  const label = root.append('g')
+    .attr('class', 'sim-labels')
+    .selectAll('text')
+    .data(labelNodes, d => d.id)
+    .join('text')
+    .attr('class', d => d.isAnchor ? 'sim-label anchor' : 'sim-label')
+    .attr('text-anchor', 'middle')
+    .text(d => d.name.split(' ').slice(-1)[0]);
+
+  similaritySimulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(d => d.anchor ? 72 + d.dist * 0.36 : 42 + d.dist * 0.42).strength(d => d.anchor ? 0.42 : 0.16))
+    .force('charge', d3.forceManyBody().strength(d => d.isAnchor ? -250 : -90))
+    .force('x', d3.forceX(d => d.seedX).strength(0.055))
+    .force('y', d3.forceY(d => d.seedY).strength(0.06))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collide', d3.forceCollide(d => d.r + 5).iterations(2))
+    .alpha(0.95)
+    .alphaDecay(0.045)
+    .on('tick', () => {
+      nodes.forEach(d => {
+        d.x = clamp(d.x, d.r + 18, W - d.r - 18);
+        d.y = clamp(d.y, d.r + 18, H - d.r - 18);
+      });
+      link
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+      node
+        .attr('cx', d => d.x)
+        .attr('cy', d => d.y);
+      label
+        .attr('x', d => d.x)
+        .attr('y', d => d.y - d.r - 8);
+    });
+}
+
 // Bind quickpicks
 function bindQuickpicks() {
   document.querySelectorAll('.qp').forEach(b => {
@@ -1144,18 +1758,35 @@ function buildDynastyLegend() {
     legend.appendChild(item);
   });
   dynastyLegendBuilt = true;
+  updateDynastyLegendState();
 }
 
 function toggleDynasty(name) {
   if (activeTeams.has(name)) {
     if (activeTeams.size === 1) return;
     activeTeams.delete(name);
-    document.getElementById('leg-' + name).classList.add('muted');
   } else {
     activeTeams.add(name);
-    document.getElementById('leg-' + name).classList.remove('muted');
   }
+  updateDynastyLegendState();
   drawAct4();
+}
+
+function setDynastyFocus(names) {
+  if (!DATA.act4) return;
+  const validTeams = Object.keys(DATA.act4);
+  const requested = (names || []).filter(name => validTeams.includes(name));
+  activeTeams = new Set(requested.length ? requested : validTeams);
+  updateDynastyLegendState();
+  drawAct4();
+}
+
+function updateDynastyLegendState() {
+  if (!DATA.act4) return;
+  Object.keys(DATA.act4).forEach(name => {
+    const item = document.getElementById('leg-' + name);
+    if (item) item.classList.toggle('muted', !activeTeams.has(name));
+  });
 }
 
 function drawAct4() {
@@ -1172,6 +1803,8 @@ function drawAct4() {
 
   const x = d3.scaleLinear().domain([1990, 2026]).range([0, iw]);
   const y = d3.scaleLinear().domain([0.2, 1.0]).range([ih, 0]);
+  const teams = Object.entries(DATA.act4);
+  storyChartContexts.act4 = { root, x, y, iw, ih, teams };
 
   // Gridlines + axes
   root.selectAll('.grid-y').data(y.ticks(5)).join('line').attr('class', 'grid-line')
@@ -1191,7 +1824,6 @@ function drawAct4() {
     .attr('fill', 'var(--muted-2)').attr('font-size', 9).attr('font-family', 'var(--font-mono)')
     .text('.500');
 
-  const teams = Object.entries(DATA.act4);
   const line = d3.line().x(d => x(d.s)).y(d => y(d.w)).curve(d3.curveMonotoneX);
 
   // Lines (draw faded first, then animate)
@@ -1295,6 +1927,26 @@ function drawAct4() {
 // =============================================================================
 // INIT
 // =============================================================================
+Object.assign(window, {
+  showSection,
+  startStoryMode,
+  closeStoryMode,
+  exploreCurrentStoryView,
+  storyNext,
+  storyPrev,
+  goToStoryStop,
+  act1Go,
+  act1SetMetric,
+  highlightPlayer,
+  togglePos,
+  toggleTrail,
+  updateYear,
+  searchPlayer,
+  selectAct3Player,
+  setMode,
+  setSimilarityAnchor,
+});
+
 bindQuickpicks();
 showSection('hero');
 

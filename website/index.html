@@ -28,7 +28,7 @@
     <button class="nav-act" data-section="act3" onclick="showSection('act3')" role="tab"><span class="n">III</span> vs.</button>
     <button class="nav-act" data-section="act4" onclick="showSection('act4')" role="tab"><span class="n">IV</span> Dynasties</button>
   </div>
-  <div class="nav-meta">COM-480 · EPFL</div>
+  <button class="nav-story" id="nav-story" onclick="startStoryMode()" aria-label="Start story mode">Story mode</button>
 </nav>
 
 <!-- ═══════ GLOBAL TOOLTIP ═══════ -->
@@ -36,6 +36,34 @@
   <div class="tt-name" id="tt-name"></div>
   <div class="tt-stat" id="tt-stat"></div>
 </div>
+
+<!-- ═══════ STORY MODE ═══════ -->
+<button class="story-launch" id="story-launch" onclick="startStoryMode()" aria-label="Start story mode">
+  <span class="story-launch-dot" aria-hidden="true"></span>
+  <span>Story mode</span>
+</button>
+
+<aside class="story-panel" id="story-panel" aria-live="polite" aria-hidden="true">
+  <div class="story-panel-top">
+    <div>
+      <div class="story-count" id="story-count">01 / 07</div>
+      <div class="story-state">Guided tour</div>
+    </div>
+    <button class="story-close" onclick="closeStoryMode()" aria-label="Close story mode">x</button>
+  </div>
+  <div class="story-progress" aria-hidden="true"><span id="story-progress-fill"></span></div>
+  <div class="story-kicker" id="story-kicker">Act I</div>
+  <h3 class="story-title" id="story-title">The line appears</h3>
+  <p class="story-copy" id="story-copy"></p>
+  <div class="story-context" id="story-context"></div>
+  <div class="story-shortcuts">Use left / right arrows to move · Esc to explore</div>
+  <div class="story-dots" id="story-dots" aria-label="Story stops"></div>
+  <div class="story-actions">
+    <button class="story-action secondary" id="story-prev" onclick="storyPrev()">Previous</button>
+    <button class="story-action primary" id="story-next" onclick="storyNext()">Next</button>
+  </div>
+  <button class="story-explore" onclick="exploreCurrentStoryView()">Explore this view</button>
+</aside>
 
 <!-- ═══════ HERO ═══════ -->
 <section id="hero" class="visible">
@@ -66,6 +94,7 @@
           <span class="pill-body"><span class="pill-title">The Dynasties</span><span class="pill-desc">Six franchises, six arcs</span></span>
         </button>
       </div>
+      <button class="hero-story-btn" onclick="startStoryMode()">Start story mode</button>
     </div>
 
     <aside class="hero-card">
@@ -326,6 +355,34 @@
       <div class="h2h-eyebrow">Head-to-head · 8 metrics</div>
       <div class="h2h-bars" id="h2h-bars"></div>
     </div>
+
+    <div class="similarity-panel">
+      <div class="similarity-head">
+        <div>
+          <div class="similarity-eyebrow">Player Similarity Constellation</div>
+          <h3 class="similarity-title">Careers cluster by statistical shape.</h3>
+        </div>
+        <div class="similarity-controls" role="tablist" aria-label="Similarity anchor">
+          <button class="sim-anchor active" id="sim-anchor-a" onclick="setSimilarityAnchor('A', this)" role="tab">Anchor A</button>
+          <button class="sim-anchor" id="sim-anchor-b" onclick="setSimilarityAnchor('B', this)" role="tab">Anchor B</button>
+        </div>
+      </div>
+      <div class="constellation-wrap">
+        <svg id="similarity-graph" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" aria-label="Player similarity graph"></svg>
+        <div class="sim-orbit-card" id="sim-orbit-card">
+          <div class="sim-card-label">Nearest orbit</div>
+          <div class="sim-card-name" id="sim-card-name">—</div>
+          <div class="sim-card-meta" id="sim-card-meta">—</div>
+        </div>
+      </div>
+      <div class="sim-legend" aria-label="Position colors">
+        <span><i style="background:var(--pg)"></i>PG</span>
+        <span><i style="background:var(--sg)"></i>SG</span>
+        <span><i style="background:var(--sf)"></i>SF</span>
+        <span><i style="background:var(--pf)"></i>PF</span>
+        <span><i style="background:var(--c)"></i>C</span>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -334,7 +391,7 @@
   <header class="act-header">
     <div class="act-eyebrow"><span class="act-num">IV</span> The Dynasties</div>
     <h2 class="act-title">Six franchises, <span class="accent-gold"><em>twenty-six rings.</em></span></h2>
-    <p class="act-lede">Win percentage per season for the six teams that defined the modern NBA. Diamonds mark championship seasons. Click a team in the legend to focus on its arc.</p>
+    <p class="act-lede">Win percentage per season for the six teams that defined the modern NBA. Rings mark championship seasons. Click a team in the legend to focus on its arc.</p>
   </header>
 
   <div class="act4-inner">
@@ -344,7 +401,7 @@
       <svg id="act4-chart" viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="chart-axis-cap chart-axis-cap-4">
         <span>Win % = wins / (wins + losses)</span>
-        <span class="muted"><span class="diamond">◆</span> Championship season</span>
+        <span class="muted">Championship season</span>
       </div>
     </div>
   </div>
@@ -392,6 +449,6 @@
 <!-- ═══════ CONFETTI LAYER ═══════ -->
 <canvas id="confetti" aria-hidden="true"></canvas>
 
-<script src="main.js?v=engaging-m3"></script>
+<script src="main.js?v=constellation-m3"></script>
 </body>
 </html>
