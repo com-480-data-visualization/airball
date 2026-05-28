@@ -1,16 +1,19 @@
 // =============================================================================
 // AIRBALL — NBA Data Story
-// Acts 1–4: D3 v7
+// Acts 1–5: D3 v7
 // =============================================================================
 
-const DATA = { act1: null, act2: null, act3: null, act4: null };
+const DATA = { act1: null, act1Shots: null, act1Real: null, act2: null, act3: null, act4: null, act5: null };
 const LOADED = new Set();
 
 const DATA_PATHS = {
   act1: '../js/act1_revolution.json',
+  act1Shots: '../js/act1_shot_zones.json',
+  act1Real: '../js/act1_real_heatmap.json',
   act2: '../js/act2_bubbles.json',
   act3: '../js/act3_players.json',
   act4: '../js/act4_dynasties.json',
+  act5: '../js/act5_draft.json',
 };
 
 async function ensureLoaded(act) {
@@ -90,30 +93,112 @@ function tickConfetti() {
 }
 
 // =============================================================================
-// SECTION SWITCHER
+// HYBRID SCROLL NARRATIVE
 // =============================================================================
-const sections = ['hero', 'act1', 'act2', 'act3', 'act4'];
+const sections = ['hero', 'act1', 'act2', 'act3', 'act4', 'act5', 'takeaway'];
+const sectionRenderPromises = new Map();
 
-async function showSection(id) {
-  sections.forEach(s => {
-    const el = document.getElementById(s);
-    el.style.display = 'none';
-    el.classList.remove('visible');
-  });
-  const target = document.getElementById(id);
-  target.style.display = 'flex';
-  target.classList.add('visible');
+function setActiveSection(id) {
   document.querySelectorAll('.nav-act').forEach(el => {
     el.classList.toggle('active', el.dataset.section === id);
   });
-  window.scrollTo(0, 0);
-
-  if (id === 'hero') { await ensureLoaded('act1'); drawHeroChart(); }
-  if (id === 'act1') { await ensureLoaded('act1'); drawAct1(act1Step); drawSmallMults(); }
-  if (id === 'act2') { await ensureLoaded('act2'); drawAct2(); }
-  if (id === 'act3') { await ensureLoaded('act3'); initAct3Defaults(); }
-  if (id === 'act4') { await ensureLoaded('act4'); buildDynastyLegend(); drawAct4(); }
+  sections.forEach(s => document.getElementById(s)?.classList.toggle('visible', s === id));
 }
+
+async function renderSection(id) {
+  if (sectionRenderPromises.has(id)) return sectionRenderPromises.get(id);
+  const promise = (async () => {
+    if (id === 'hero') {
+      await ensureLoaded('act1');
+      drawHeroChart();
+    }
+    if (id === 'act1') {
+      await Promise.all([ensureLoaded('act1'), ensureLoaded('act1Shots'), ensureLoaded('act1Real')]);
+      drawAct1(act1Step);
+      drawSmallMults();
+      initShotZoneHeatmap();
+    }
+    if (id === 'act2') {
+      await ensureLoaded('act2');
+      drawAct2();
+    }
+    if (id === 'act3') {
+      await ensureLoaded('act3');
+      initAct3Defaults();
+    }
+    if (id === 'act4') {
+      await ensureLoaded('act4');
+      buildDynastyLegend();
+      drawAct4();
+    }
+    if (id === 'act5') {
+      await ensureLoaded('act5');
+      drawDraftHeatmap();
+    }
+  })();
+  sectionRenderPromises.set(id, promise);
+  return promise;
+}
+
+async function showSection(id, opts = {}) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  setActiveSection(id);
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const behavior = opts.instant || reduce ? 'auto' : 'smooth';
+  target.scrollIntoView({ block: 'start', behavior });
+  await renderSection(id);
+}
+
+function setupScrollNarrative() {
+  setActiveSection('hero');
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries
+        .filter(e => e.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      const id = visible.target.id;
+      setActiveSection(id);
+      renderSection(id);
+    }, { rootMargin: '-35% 0px -45% 0px', threshold: [0.12, 0.32, 0.55] });
+    sections.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+  } else {
+    sections.forEach(id => renderSection(id));
+  }
+  syncActiveSectionFromScroll();
+}
+
+let sectionSyncFrame = null;
+function syncActiveSectionFromScroll() {
+  const marker = window.innerHeight * 0.42;
+  let current = sections[0];
+  let bestDistance = Infinity;
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const containsMarker = rect.top <= marker && rect.bottom >= marker;
+    const distance = containsMarker ? 0 : Math.min(Math.abs(rect.top - marker), Math.abs(rect.bottom - marker));
+    if (containsMarker || distance < bestDistance) {
+      current = id;
+      bestDistance = distance;
+    }
+  });
+  setActiveSection(current);
+  renderSection(current);
+}
+
+window.addEventListener('scroll', () => {
+  if (sectionSyncFrame) return;
+  sectionSyncFrame = requestAnimationFrame(() => {
+    sectionSyncFrame = null;
+    syncActiveSectionFromScroll();
+  });
+}, { passive: true });
 
 // =============================================================================
 // STORY MODE — curated walkthrough that drives the existing charts
@@ -121,6 +206,7 @@ async function showSection(id) {
 const STORY_STOPS = [
   {
     section: 'act1',
+    spotlight: '.chart-area',
     step: 0,
     metric: 'x3pa',
     callout: { season: 1980, label: '2.8 3PA', detail: 'new line, tiny usage', dx: 72, dy: -62 },
@@ -131,6 +217,7 @@ const STORY_STOPS = [
   },
   {
     section: 'act1',
+    spotlight: '.chart-area',
     step: 3,
     metric: 'x3pa',
     callout: { season: 2016, label: 'Warriors gravity', detail: 'the curve bends upward', dx: -205, dy: -72 },
@@ -140,7 +227,21 @@ const STORY_STOPS = [
     context: 'Curry era · line acceleration',
   },
   {
+    section: 'act1',
+    spotlight: '#shot-geography',
+    step: 4,
+    metric: 'x3pa',
+    shotYear: 2026,
+    shotMode: 'real',
+    callout: { zone: 'long_mid', label: 'Mid-range share falls here', detail: 'long twos lose their territory', dx: -230, dy: -72, width: 220 },
+    kicker: 'Act I · Shot geography',
+    title: 'The mid-range disappears',
+    copy: 'The line chart shows threes rising; the court view shows where those attempts came from. Long twos shrink as spacing pulls shots either to the rim or beyond the arc.',
+    context: 'Player Shooting data · 1997-2026',
+  },
+  {
     section: 'act2',
+    spotlight: '.bubble-chart-wrap',
     year: 1996,
     highlight: 'Michael Jordan',
     trail: false,
@@ -152,6 +253,7 @@ const STORY_STOPS = [
   },
   {
     section: 'act2',
+    spotlight: '.bubble-chart-wrap',
     year: 2016,
     highlight: 'Stephen Curry',
     trail: true,
@@ -163,6 +265,7 @@ const STORY_STOPS = [
   },
   {
     section: 'act3',
+    spotlight: '.radar-center',
     matchup: ['Stephen Curry', 'Kobe Bryant'],
     mode: 'normalized',
     callout: { label: 'Normalized lens', detail: 'percentiles make the eras comparable' },
@@ -173,6 +276,7 @@ const STORY_STOPS = [
   },
   {
     section: 'act4',
+    spotlight: '.chart-wrap-4',
     teams: ['Bulls', 'Warriors', 'Celtics'],
     callout: { team: 'Warriors', season: 2016, label: 'Three dynasty shapes', detail: 'spike, arc, bookend', dx: -215, dy: -92 },
     kicker: 'Act IV · 1990-2026',
@@ -181,12 +285,23 @@ const STORY_STOPS = [
     context: 'Focused dynasty arcs · 12 combined titles',
   },
   {
-    section: 'hero',
-    callout: { season: 2026, label: '13x growth', detail: 'one line rewired the sport', dx: -190, dy: -84 },
+    section: 'act5',
+    spotlight: '.draft-panel',
+    draftCell: { bucket: '1', tier: '50_plus' },
+    callout: { label: 'Pick 1 dominates this tier', detail: 'superstar odds peak at the top', dx: 62, dy: 56, width: 224 },
+    kicker: 'Act V · Draft predictor',
+    title: 'The top pick is still the strongest bet',
+    copy: 'The draft never becomes deterministic, but career VORP makes the slope visible: the highest picks create stars far more often than the field.',
+    context: 'Draft classes through 2019 · 2020-2025 held out',
+  },
+  {
+    section: 'takeaway',
+    spotlight: '.takeaway-panel',
+    callout: { label: 'One story, three lenses', detail: 'space, value, greatness' },
     kicker: 'Final takeaway',
     title: 'The sport changed what greatness looks like',
-    copy: 'The NBA did not just shoot more threes. It changed spacing, efficiency, roster value, and the shape of a star season.',
-    context: 'Use Explore to keep the current view, or Restart the tour.',
+    copy: 'Basketball did not just get better at shooting threes; it changed how value, space, and greatness are measured.',
+    context: 'Use Explore to keep reading, or Restart the tour.',
   },
 ];
 
@@ -195,9 +310,30 @@ let storyIndex = 0;
 let storyChartContexts = {
   hero: null,
   act1: null,
+  act1Shots: null,
   act2: null,
   act4: null,
+  act5: null,
 };
+
+const STORY_GUIDE_SELECTORS = [
+  '.hero-card',
+  '.hero-acts',
+  '.chart-area',
+  '#shot-geography',
+  '.story-blocks',
+  '.bubble-chart-wrap',
+  '.season-dna',
+  '.radar-center',
+  '.player-card',
+  '.head-to-head',
+  '.similarity-panel',
+  '.dynasty-legend',
+  '.chart-wrap-4',
+  '.draft-panel',
+  '.draft-detail',
+  '.takeaway-panel',
+];
 
 async function startStoryMode(index = 0) {
   storyActive = true;
@@ -207,6 +343,7 @@ async function startStoryMode(index = 0) {
 function closeStoryMode() {
   storyActive = false;
   clearStoryAnnotations();
+  clearStoryGuidance();
   renderStoryPanel();
 }
 
@@ -231,6 +368,7 @@ async function goToStoryStop(index) {
   const stop = STORY_STOPS[storyIndex];
   await showSection(stop.section);
   applyStoryState(stop);
+  applyStoryGuidance(stop);
   renderStoryPanel();
   renderStoryAnnotations(stop);
   focusStoryViewport(stop);
@@ -285,6 +423,8 @@ function applyStoryState(stop) {
       const block = document.querySelectorAll('.story-block')[stop.step];
       if (block) act1Go(stop.step, block);
     }
+    if (stop.shotMode) setShotMapMode(stop.shotMode);
+    if (stop.shotYear) setShotZoneYear(stop.shotYear);
   }
 
   if (stop.section === 'act2') {
@@ -310,14 +450,21 @@ function applyStoryState(stop) {
   if (stop.section === 'act4' && stop.teams) {
     setDynastyFocus(stop.teams);
   }
+
+  if (stop.section === 'act5' && stop.draftCell) {
+    drawDraftHeatmap();
+    selectDraftCell(stop.draftCell.bucket, stop.draftCell.tier);
+  }
 }
 
 function focusStoryViewport(stop) {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const behavior = reduce ? 'auto' : 'smooth';
-  const target = stop.section === 'act2' ? document.querySelector('.bubble-chart-wrap')
+  const target = stop.spotlight ? document.querySelector(stop.spotlight)
+              : stop.section === 'act2' ? document.querySelector('.bubble-chart-wrap')
               : stop.section === 'act3' ? document.querySelector('.radar-center')
               : stop.section === 'act4' ? document.querySelector('.chart-wrap-4')
+              : stop.section === 'act5' ? document.querySelector('.draft-panel')
               : null;
   if (!target) return;
   setTimeout(() => target.scrollIntoView({ block: 'center', behavior }), 80);
@@ -328,6 +475,27 @@ function clearStoryAnnotations() {
   document.querySelectorAll('.story-result-callout').forEach(el => el.remove());
 }
 
+function clearStoryGuidance() {
+  document.querySelectorAll('.story-spotlight, .story-muted, .story-section-active').forEach(el => {
+    el.classList.remove('story-spotlight', 'story-muted', 'story-section-active');
+  });
+}
+
+function applyStoryGuidance(stop) {
+  clearStoryGuidance();
+  if (!storyActive || !stop?.section) return;
+  const section = document.getElementById(stop.section);
+  if (!section) return;
+  section.classList.add('story-section-active');
+  const target = stop.spotlight ? document.querySelector(stop.spotlight) : null;
+  const candidates = section.querySelectorAll(STORY_GUIDE_SELECTORS.join(','));
+  candidates.forEach(el => {
+    if (target && (el === target || el.contains(target) || target.contains(el))) return;
+    el.classList.add('story-muted');
+  });
+  if (target) target.classList.add('story-spotlight');
+}
+
 function renderStoryAnnotations(stop = STORY_STOPS[storyIndex]) {
   clearStoryAnnotations();
   if (!storyActive || !stop?.callout) return;
@@ -336,6 +504,8 @@ function renderStoryAnnotations(stop = STORY_STOPS[storyIndex]) {
   if (stop.section === 'act2') renderAct2StoryCallout(stop);
   if (stop.section === 'act3') renderAct3StoryCallout(stop);
   if (stop.section === 'act4') renderAct4StoryCallout(stop);
+  if (stop.section === 'act5') renderAct5StoryCallout(stop);
+  if (stop.section === 'takeaway') renderTakeawayStoryCallout(stop);
 }
 
 function clamp(v, min, max) {
@@ -385,6 +555,51 @@ function drawSvgStoryCallout(ctx, x, y, opts) {
   g.transition().delay(220).duration(420).ease(d3.easeCubicOut).style('opacity', 1);
 }
 
+function drawChartAnnotation(root, x, y, opts = {}) {
+  if (!root) return;
+  const width = opts.width || 184;
+  const height = opts.detail ? 54 : 36;
+  const bounds = opts.bounds || { iw: 720, ih: 360 };
+  const boxX = clamp(x + (opts.dx ?? 58), 8, Math.max(8, bounds.iw - width - 8));
+  const boxY = clamp(y + (opts.dy ?? -56), 8, Math.max(8, bounds.ih - height - 8));
+  const lineX = x < boxX ? boxX : boxX + width;
+  const lineY = boxY + height / 2;
+  const g = root.append('g')
+    .attr('class', 'chart-annotation')
+    .style('opacity', 0)
+    .style('pointer-events', 'none');
+
+  g.append('path')
+    .attr('class', 'chart-annotation-line')
+    .attr('d', `M${x},${y} L${lineX},${lineY}`);
+  g.append('circle')
+    .attr('class', 'chart-annotation-dot')
+    .attr('cx', x)
+    .attr('cy', y)
+    .attr('r', 4);
+
+  const box = g.append('g').attr('transform', `translate(${boxX},${boxY})`);
+  box.append('rect')
+    .attr('class', 'chart-annotation-bg')
+    .attr('width', width)
+    .attr('height', height)
+    .attr('rx', 6);
+  box.append('text')
+    .attr('class', 'chart-annotation-title')
+    .attr('x', 10)
+    .attr('y', opts.detail ? 20 : 23)
+    .text(opts.label);
+  if (opts.detail) {
+    box.append('text')
+      .attr('class', 'chart-annotation-detail')
+      .attr('x', 10)
+      .attr('y', 39)
+      .text(opts.detail);
+  }
+
+  g.transition().delay(opts.delay || 240).duration(380).ease(d3.easeCubicOut).style('opacity', 1);
+}
+
 function renderHeroStoryCallout(stop) {
   const ctx = storyChartContexts.hero;
   const d = DATA.act1;
@@ -396,6 +611,13 @@ function renderHeroStoryCallout(stop) {
 }
 
 function renderAct1StoryCallout(stop) {
+  if (stop.callout.zone) {
+    const ctx = storyChartContexts.act1Shots;
+    const target = ctx?.centers?.[stop.callout.zone];
+    if (!ctx || !target) return;
+    drawSvgStoryCallout(ctx, target.x, target.y, stop.callout);
+    return;
+  }
   const ctx = storyChartContexts.act1;
   const d = DATA.act1;
   if (!ctx || !d || act1Metric !== 'x3pa') return;
@@ -435,6 +657,44 @@ function renderAct4StoryCallout(stop) {
   const idx = teamData.seasons.indexOf(stop.callout.season);
   if (idx < 0) return;
   drawSvgStoryCallout(ctx, ctx.x(stop.callout.season), ctx.y(teamData.wins[idx]), stop.callout);
+}
+
+function renderAct5StoryCallout(stop) {
+  const ctx = storyChartContexts.act5;
+  const cell = stop.draftCell || selectedDraftCell;
+  if (ctx?.root && cell && ctx.x(cell.bucket) !== undefined && ctx.y(cell.tier) !== undefined) {
+    drawSvgStoryCallout(
+      ctx,
+      ctx.x(cell.bucket) + ctx.x.bandwidth() / 2,
+      ctx.y(cell.tier) + ctx.y.bandwidth() / 2,
+      stop.callout
+    );
+  }
+
+  const host = document.querySelector('.draft-detail');
+  if (!host) return;
+  const el = document.createElement('div');
+  el.className = 'story-result-callout';
+  const selected = document.getElementById('draft-detail-title')?.textContent || '';
+  el.innerHTML = `
+    <div class="story-result-label">${stop.callout.label}</div>
+    <div class="story-result-detail">${stop.callout.detail}</div>
+    <div class="story-result-verdict">${selected}</div>
+  `;
+  host.appendChild(el);
+}
+
+function renderTakeawayStoryCallout(stop) {
+  const host = document.querySelector('.takeaway-panel');
+  if (!host) return;
+  const el = document.createElement('div');
+  el.className = 'story-result-callout takeaway-story-callout';
+  el.innerHTML = `
+    <div class="story-result-label">${stop.callout.label}</div>
+    <div class="story-result-detail">${stop.callout.detail}</div>
+    <div class="story-result-verdict">The ending is now part of the walkthrough, not just the footer.</div>
+  `;
+  host.appendChild(el);
 }
 
 document.addEventListener('keydown', e => {
@@ -869,6 +1129,323 @@ function drawSmallMults() {
     };
     c.style.cursor = 'pointer';
   });
+}
+
+// =============================================================================
+// ACT 1 EXTENSION — Shot-zone court heatmap
+// =============================================================================
+let shotZoneYear = 2026;
+let shotMapMode = 'real';
+
+function initShotZoneHeatmap() {
+  const d = DATA.act1Shots;
+  if (!d) return;
+  const seasons = d.seasons || [];
+  if (!seasons.includes(shotZoneYear)) shotZoneYear = seasons[seasons.length - 1] || 2026;
+  const slider = document.getElementById('shot-year-slider');
+  if (slider && seasons.length) {
+    slider.min = seasons[0];
+    slider.max = seasons[seasons.length - 1];
+    slider.value = shotZoneYear;
+  }
+  setShotZoneYear(shotZoneYear);
+}
+
+function setShotMapMode(mode, btn = null) {
+  shotMapMode = mode === 'zones' ? 'zones' : 'real';
+  document.querySelectorAll('.shot-map-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.shotMode === shotMapMode);
+  });
+  if (btn) btn.classList.add('active');
+  drawShotZoneHeatmap();
+}
+
+function setShotZoneYear(year) {
+  const d = DATA.act1Shots;
+  if (!d) return;
+  const seasons = d.seasons || [];
+  const requested = parseInt(year, 10);
+  shotZoneYear = seasons.includes(requested)
+    ? requested
+    : seasons.reduce((best, s) => Math.abs(s - requested) < Math.abs(best - requested) ? s : best, seasons[0]);
+
+  const slider = document.getElementById('shot-year-slider');
+  const label = document.getElementById('shot-year-label');
+  if (slider) slider.value = shotZoneYear;
+  if (label) label.textContent = shotZoneYear;
+  document.querySelectorAll('.shot-milestones button').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim() === String(shotZoneYear));
+  });
+  drawShotZoneHeatmap();
+}
+
+function drawShotZoneHeatmap() {
+  if (shotMapMode === 'real' && DATA.act1Real) {
+    drawRealShotHeatmap();
+    return;
+  }
+  const d = DATA.act1Shots;
+  if (!d) return;
+  const rows = d.bySeason?.[String(shotZoneYear)] || d.bySeason?.[shotZoneYear] || [];
+  if (!rows.length) return;
+  const zoneMeta = new Map((d.zones || []).map(z => [z.id, z]));
+  const rowById = new Map(rows.map(r => [r.id, r]));
+  const maxShare = Math.max(38, d3.max(rows, r => r.share) || 38);
+
+  const svg = d3.select('#shot-zone-chart');
+  svg.selectAll('*').remove();
+  const W = 640, H = 430;
+  const hoop = { x: 320, y: 360 };
+
+  const zoneShapes = [
+    {
+      id: 'three',
+      path: `M70,398 L70,190 A250,250 0 0 1 570,190 L570,398 Z`,
+      label: { x: 320, y: 106 },
+    },
+    {
+      id: 'long_mid',
+      path: `M150,398 L150,228 A170,170 0 0 1 490,228 L490,398 Z`,
+      label: { x: 320, y: 208 },
+    },
+    {
+      id: 'mid',
+      path: `M205,398 L205,280 A115,115 0 0 1 435,280 L435,398 Z`,
+      label: { x: 320, y: 276 },
+    },
+    {
+      id: 'short',
+      path: 'M252,265 H388 V398 H252 Z',
+      label: { x: 320, y: 320 },
+    },
+    {
+      id: 'rim',
+      circle: { cx: hoop.x, cy: hoop.y, r: 48 },
+      label: { x: 320, y: 368 },
+    },
+  ];
+  const centers = Object.fromEntries(zoneShapes.map(z => [z.id, z.label]));
+  const root = svg.append('g').attr('class', 'shot-root');
+
+  const zones = root.append('g').attr('class', 'shot-zones');
+  zoneShapes.forEach(shape => {
+    const row = rowById.get(shape.id) || { share: 0, fg: null, delta_from_start: 0 };
+    const meta = zoneMeta.get(shape.id) || {};
+    const opacity = 0.16 + (row.share / maxShare) * 0.72;
+    const sel = shape.circle
+      ? zones.append('circle')
+          .attr('cx', shape.circle.cx).attr('cy', shape.circle.cy).attr('r', shape.circle.r)
+      : zones.append('path').attr('d', shape.path);
+    sel.attr('class', 'shot-zone')
+      .attr('data-zone', shape.id)
+      .attr('fill', meta.color || '#ff6b1a')
+      .attr('fill-opacity', opacity)
+      .on('mouseenter', () => {
+        const delta = row.delta_from_start >= 0 ? `+${row.delta_from_start}` : `${row.delta_from_start}`;
+        const fg = row.fg === null ? 'FG n/a' : `${row.fg}% FG`;
+        showTip(meta.label || shape.id, `${shotZoneYear}: ${row.share}% of attempts<br>${fg} · ${delta} pts since ${d.summary.startSeason}`, 'gold');
+      })
+      .on('mouseleave', hideTip);
+  });
+
+  const court = root.append('g').attr('class', 'court-lines');
+  court.append('rect').attr('class', 'court-line').attr('x', 70).attr('y', 28).attr('width', 500).attr('height', 370);
+  court.append('line').attr('class', 'court-line').attr('x1', 70).attr('x2', 570).attr('y1', 398).attr('y2', 398);
+  court.append('rect').attr('class', 'court-line').attr('x', 245).attr('y', 208).attr('width', 150).attr('height', 190);
+  court.append('rect').attr('class', 'court-line').attr('x', 278).attr('y', 318).attr('width', 84).attr('height', 80);
+  court.append('circle').attr('class', 'court-line').attr('cx', hoop.x).attr('cy', hoop.y).attr('r', 16);
+  court.append('line').attr('class', 'court-line').attr('x1', 286).attr('x2', 354).attr('y1', 352).attr('y2', 352);
+  court.append('path').attr('class', 'court-line').attr('d', `M70,190 A250,250 0 0 1 570,190`);
+  court.append('path').attr('class', 'court-line').attr('d', `M205,280 A115,115 0 0 1 435,280`);
+
+  root.append('g').selectAll('text')
+    .data(zoneShapes)
+    .join('text')
+    .attr('class', 'shot-zone-label')
+    .attr('x', z => z.label.x)
+    .attr('y', z => z.label.y)
+    .text(z => {
+      const meta = zoneMeta.get(z.id) || {};
+      const row = rowById.get(z.id) || {};
+      return `${meta.short || z.id} · ${row.share || 0}%`;
+    });
+
+  const mid = rowById.get('mid')?.share || 0;
+  const longMid = rowById.get('long_mid')?.share || 0;
+  const currentMid = +(mid + longMid).toFixed(1);
+  const startMid = d.summary?.midrangeStart ?? currentMid;
+  const midDelta = +(currentMid - startMid).toFixed(1);
+  const three = rowById.get('three') || {};
+  const rim = rowById.get('rim') || {};
+  const midDetail = midDelta < 0
+    ? `${Math.abs(midDelta).toFixed(1)} pts lower than ${d.summary.startSeason}`
+    : `baseline: ${currentMid}% of attempts`;
+  drawChartAnnotation(root, centers.long_mid.x, centers.long_mid.y, {
+    label: 'Mid-range share falls here',
+    detail: midDetail,
+    dx: -232,
+    dy: -74,
+    width: 210,
+    bounds: { iw: W, ih: H },
+  });
+  drawChartAnnotation(root, centers.three.x, centers.three.y, {
+    label: 'Arc absorbs attempts',
+    detail: `${three.share || 0}% of shots in ${shotZoneYear}`,
+    dx: 82,
+    dy: 40,
+    width: 180,
+    bounds: { iw: W, ih: H },
+    delay: 360,
+  });
+  drawChartAnnotation(root, centers.rim.x, centers.rim.y, {
+    label: 'Rim still anchors value',
+    detail: rim.fg ? `${rim.fg}% FG near basket` : 'highest-value interior zone',
+    dx: 74,
+    dy: -62,
+    width: 178,
+    bounds: { iw: W, ih: H },
+    delay: 480,
+  });
+
+  storyChartContexts.act1Shots = { root, centers, iw: W, ih: H };
+
+  const now = document.getElementById('shot-midrange-now');
+  const copy = document.getElementById('shot-midrange-copy');
+  if (now) now.textContent = `${currentMid}%`;
+  if (copy) {
+    const down = midDelta < 0 ? `${Math.abs(midDelta)} points lower` : `${midDelta} points higher`;
+    copy.textContent = `${shotZoneYear} mid-range share is ${down} than ${d.summary.startSeason}; the arc absorbs much of that old long-two territory.`;
+  }
+  const list = document.getElementById('shot-zone-list');
+  if (list) {
+    list.innerHTML = rows.map(row => {
+      const meta = zoneMeta.get(row.id) || {};
+      const delta = row.delta_from_start >= 0 ? `+${row.delta_from_start}` : `${row.delta_from_start}`;
+      return `<div class="shot-zone-row">
+        <i style="background:${meta.color || 'var(--accent)'}"></i>
+        <span>${meta.label || row.id}</span>
+        <strong>${row.share}% · ${delta}</strong>
+      </div>`;
+    }).join('');
+  }
+}
+
+function drawShotCourt(root, hoop) {
+  const court = root.append('g').attr('class', 'court-lines');
+  court.append('rect').attr('class', 'court-line').attr('x', 70).attr('y', 28).attr('width', 500).attr('height', 370);
+  court.append('line').attr('class', 'court-line').attr('x1', 70).attr('x2', 570).attr('y1', 398).attr('y2', 398);
+  court.append('rect').attr('class', 'court-line').attr('x', 245).attr('y', 208).attr('width', 150).attr('height', 190);
+  court.append('rect').attr('class', 'court-line').attr('x', 278).attr('y', 318).attr('width', 84).attr('height', 80);
+  court.append('circle').attr('class', 'court-line').attr('cx', hoop.x).attr('cy', hoop.y).attr('r', 16);
+  court.append('line').attr('class', 'court-line').attr('x1', 286).attr('x2', 354).attr('y1', 352).attr('y2', 352);
+  court.append('path').attr('class', 'court-line').attr('d', `M70,190 A250,250 0 0 1 570,190`);
+  court.append('path').attr('class', 'court-line').attr('d', `M205,280 A115,115 0 0 1 435,280`);
+}
+
+function drawRealShotHeatmap() {
+  const d = DATA.act1Real;
+  if (!d) return;
+  const seasons = d.seasons || [];
+  if (!seasons.length) return;
+  const realSeason = seasons.includes(shotZoneYear)
+    ? shotZoneYear
+    : seasons.reduce((best, s) => Math.abs(s - shotZoneYear) < Math.abs(best - shotZoneYear) ? s : best, seasons[0]);
+  const season = d.bySeason?.[String(realSeason)];
+  if (!season) return;
+
+  const svg = d3.select('#shot-zone-chart');
+  svg.selectAll('*').remove();
+  const W = 640, H = 430;
+  const hoop = { x: 320, y: 360 };
+  const root = svg.append('g').attr('class', 'shot-root real-shot-root');
+  const grid = d.grid || { xDomain: [-250, 250], yDomain: [-52, 423], xBins: 30, yBins: 28 };
+  const xScale = d3.scaleLinear().domain(grid.xDomain).range([70, 570]);
+  const yScale = d3.scaleLinear().domain(grid.yDomain).range([398, 28]);
+  const xStep = (grid.xDomain[1] - grid.xDomain[0]) / grid.xBins;
+  const yStep = (grid.yDomain[1] - grid.yDomain[0]) / grid.yBins;
+  const densities = (season.cells || []).map(c => c.d).sort(d3.ascending);
+  const maxDensity = Math.max(1, d3.quantile(densities, 0.985) || d3.max(densities) || 1);
+  const color = d3.scaleSequential(t => d3.interpolateRgbBasis(['#121a2b', '#1d6fe8', '#4ade80', '#f5c518', '#ff6b1a'])(t))
+    .domain([0, maxDensity * 0.82]);
+
+  const heat = root.append('g').attr('class', 'real-heat-layer');
+  heat.selectAll('rect')
+    .data(season.cells || [])
+    .join('rect')
+    .attr('class', 'real-heat-cell')
+    .attr('x', c => xScale(grid.xDomain[0] + c.x * xStep))
+    .attr('y', c => yScale(grid.yDomain[0] + (c.y + 1) * yStep))
+    .attr('width', Math.ceil((500 / grid.xBins) + 1))
+    .attr('height', Math.ceil((370 / grid.yBins) + 1))
+    .attr('rx', 3)
+    .attr('fill', c => color(c.d))
+    .attr('fill-opacity', c => Math.max(0.16, Math.min(0.96, Math.sqrt(c.d / maxDensity) * 0.98)))
+    .on('mouseenter', (e, c) => {
+      showTip('Real shot-density bin', `${realSeason}: ${c.a.toLocaleString()} attempts<br>${c.fg}% FG · ${c.d} per 10k shots`, 'gold');
+    })
+    .on('mouseleave', hideTip);
+
+  drawShotCourt(root, hoop);
+
+  const project = (locX, locY) => ({ x: xScale(locX), y: yScale(locY) });
+  const centers = {
+    long_mid: project(-125, 92),
+    three: project(0, 258),
+    rim: project(0, 4),
+  };
+
+  drawChartAnnotation(root, centers.long_mid.x, centers.long_mid.y, {
+    label: 'Mid-range share falls here',
+    detail: `${season.midrangeShare}% of real attempts`,
+    dx: -232,
+    dy: -72,
+    width: 210,
+    bounds: { iw: W, ih: H },
+  });
+  drawChartAnnotation(root, centers.three.x, centers.three.y, {
+    label: 'Arc density grows',
+    detail: `${season.threeShare}% of attempts from three`,
+    dx: 82,
+    dy: 32,
+    width: 180,
+    bounds: { iw: W, ih: H },
+    delay: 360,
+  });
+  drawChartAnnotation(root, centers.rim.x, centers.rim.y, {
+    label: 'Rim pressure remains',
+    detail: `${season.rimShare}% in restricted area`,
+    dx: 78,
+    dy: -62,
+    width: 180,
+    bounds: { iw: W, ih: H },
+    delay: 480,
+  });
+
+  root.append('text')
+    .attr('class', 'real-heat-source')
+    .attr('x', 84)
+    .attr('y', 46)
+    .text(`real shot locations · ${season.shots.toLocaleString()} attempts`);
+
+  storyChartContexts.act1Shots = { root, centers, iw: W, ih: H };
+
+  const label = document.getElementById('shot-year-label');
+  if (label) label.textContent = realSeason;
+  const now = document.getElementById('shot-midrange-now');
+  const copy = document.getElementById('shot-midrange-copy');
+  if (now) now.textContent = `${season.midrangeShare}%`;
+  if (copy) {
+    copy.textContent = `${realSeason} uses real NBA Stats LOC_X/LOC_Y shot attempts binned into a half-court density map; the old mid-range pocket is now much lighter than the arc.`;
+  }
+  const list = document.getElementById('shot-zone-list');
+  if (list) {
+    list.innerHTML = `
+      <div class="shot-zone-row"><i style="background:var(--accent2)"></i><span>Real attempts</span><strong>${season.shots.toLocaleString()}</strong></div>
+      <div class="shot-zone-row"><i style="background:var(--accent)"></i><span>3-point share</span><strong>${season.threeShare}%</strong></div>
+      <div class="shot-zone-row"><i style="background:var(--gold)"></i><span>Mid-range share</span><strong>${season.midrangeShare}%</strong></div>
+      <div class="shot-zone-row"><i style="background:var(--green)"></i><span>Restricted-area share</span><strong>${season.rimShare}%</strong></div>
+    `;
+  }
 }
 
 // =============================================================================
@@ -1925,6 +2502,163 @@ function drawAct4() {
 }
 
 // =============================================================================
+// ACT 5 — Draft Predictor
+// =============================================================================
+let selectedDraftCell = { bucket: '1', tier: '50_plus' };
+
+function drawDraftHeatmap() {
+  const d = DATA.act5;
+  const svg = d3.select('#draft-heatmap');
+  if (!svg.node() || !d) return;
+  svg.selectAll('*').remove();
+
+  const W = 1040, H = 560;
+  const m = { top: 38, right: 28, bottom: 72, left: 92 };
+  const iw = W - m.left - m.right;
+  const ih = H - m.top - m.bottom;
+  const root = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+  const buckets = d.pickBuckets || [];
+  const tiers = [...(d.vorpTiers || [])].reverse();
+  const x = d3.scaleBand().domain(buckets.map(b => b.id)).range([0, iw]).padding(0.06);
+  const y = d3.scaleBand().domain(tiers.map(t => t.id)).range([0, ih]).padding(0.08);
+  const maxRate = Math.max(18, d3.max(d.cells || [], c => c.rate) || 18);
+  const color = d3.scaleSequential(t => d3.interpolateRgbBasis(['#121a2b', '#1d6fe8', '#4ade80', '#f5c518', '#ff6b1a'])(t))
+    .domain([0, maxRate]);
+  const bucketLabel = new Map(buckets.map(b => [b.id, b.label]));
+  const tierLabel = new Map((d.vorpTiers || []).map(t => [t.id, t.label]));
+
+  root.append('g').selectAll('rect')
+    .data(d.cells || [], c => `${c.bucket}:${c.tier}`)
+    .join('rect')
+    .attr('class', c => `draft-cell ${selectedDraftCell.bucket === c.bucket && selectedDraftCell.tier === c.tier ? 'selected' : ''}`)
+    .attr('x', c => x(c.bucket))
+    .attr('y', c => y(c.tier))
+    .attr('width', x.bandwidth())
+    .attr('height', y.bandwidth())
+    .attr('rx', 5)
+    .attr('fill', c => color(c.rate))
+    .attr('fill-opacity', c => c.total ? 0.92 : 0.18)
+    .on('mouseenter', (e, c) => {
+      const med = c.medianVorp === null ? 'median n/a' : `median ${c.medianVorp} VORP`;
+      showTip(`Pick ${bucketLabel.get(c.bucket)} · ${tierLabel.get(c.tier)} VORP`, `${c.count}/${c.total} players · ${c.rate}%<br>${med}`, 'blue');
+    })
+    .on('mouseleave', hideTip)
+    .on('click', (e, c) => {
+      selectDraftCell(c.bucket, c.tier);
+      fireConfetti(e.clientX, e.clientY, { count: 16, colors: ['#4d8dff', '#4ade80', '#f5c518', '#ffffff'] });
+    });
+
+  root.append('g').selectAll('text')
+    .data(d.cells || [], c => `${c.bucket}:${c.tier}`)
+    .join('text')
+    .attr('class', 'draft-cell-label')
+    .attr('x', c => x(c.bucket) + x.bandwidth() / 2)
+    .attr('y', c => y(c.tier) + y.bandwidth() / 2 + 4)
+    .text(c => c.rate >= 4 ? `${c.rate}%` : '');
+
+  root.append('g').selectAll('text')
+    .data(buckets)
+    .join('text')
+    .attr('class', 'draft-axis-label')
+    .attr('x', b => x(b.id) + x.bandwidth() / 2)
+    .attr('y', ih + 25)
+    .attr('text-anchor', 'middle')
+    .text(b => b.label);
+
+  root.append('g').selectAll('text')
+    .data(tiers)
+    .join('text')
+    .attr('class', 'draft-axis-label')
+    .attr('x', -12)
+    .attr('y', t => y(t.id) + y.bandwidth() / 2 + 4)
+    .attr('text-anchor', 'end')
+    .text(t => t.label);
+
+  const cellByKey = new Map((d.cells || []).map(c => [`${c.bucket}:${c.tier}`, c]));
+  const annotateDraftCell = (bucket, tier, opts) => {
+    const cell = cellByKey.get(`${bucket}:${tier}`);
+    if (!cell || x(bucket) === undefined || y(tier) === undefined) return;
+    drawChartAnnotation(
+      root,
+      x(bucket) + x.bandwidth() / 2,
+      y(tier) + y.bandwidth() / 2,
+      { ...opts, bounds: { iw, ih } }
+    );
+  };
+  annotateDraftCell('1', '50_plus', {
+    label: 'Pick 1 dominates this tier',
+    detail: `${cellByKey.get('1:50_plus')?.rate || 0}% reach 50+ VORP`,
+    dx: 66,
+    dy: 56,
+    width: 224,
+  });
+  annotateDraftCell('11_14', '50_plus', {
+    label: 'Stars leak past the top 10',
+    detail: 'Malone, Kobe, Reggie live here',
+    dx: 54,
+    dy: 82,
+    width: 210,
+    delay: 380,
+  });
+  annotateDraftCell('15_20', 'le_0', {
+    label: 'Risk rises fast',
+    detail: `${cellByKey.get('15_20:le_0')?.rate || 0}% finish at <=0 VORP`,
+    dx: 44,
+    dy: -74,
+    width: 176,
+    delay: 500,
+  });
+
+  root.append('text')
+    .attr('class', 'draft-axis-label')
+    .attr('x', iw / 2).attr('y', ih + 56)
+    .attr('text-anchor', 'middle')
+    .text('Overall draft pick bucket');
+  root.append('text')
+    .attr('class', 'draft-axis-label')
+    .attr('transform', 'rotate(-90)')
+    .attr('x', -ih / 2).attr('y', -70)
+    .attr('text-anchor', 'middle')
+    .text('Career VORP tier');
+
+  const summary = document.getElementById('draft-summary');
+  if (summary && d.summary) {
+    summary.textContent = `${d.summary.reliablePlayers.toLocaleString()} matched players · classes ${d.summary.reliabilitySeasons[0]}-${d.summary.reliabilitySeasons[1]} · recent classes held out`;
+  }
+  storyChartContexts.act5 = { root, x, y, iw, ih };
+  selectDraftCell(selectedDraftCell.bucket, selectedDraftCell.tier, false);
+}
+
+function selectDraftCell(bucket, tier, redraw = true) {
+  if (!DATA.act5) return;
+  selectedDraftCell = { bucket, tier };
+  const cell = (DATA.act5.cells || []).find(c => c.bucket === bucket && c.tier === tier);
+  const bucketMeta = (DATA.act5.pickBuckets || []).find(b => b.id === bucket);
+  const tierMeta = (DATA.act5.vorpTiers || []).find(t => t.id === tier);
+  if (!cell || !bucketMeta || !tierMeta) return;
+
+  d3.selectAll('.draft-cell').classed('selected', c => c && c.bucket === bucket && c.tier === tier);
+
+  const title = document.getElementById('draft-detail-title');
+  const copy = document.getElementById('draft-detail-copy');
+  const examples = document.getElementById('draft-examples');
+  if (title) title.textContent = `Pick ${bucketMeta.label} -> ${tierMeta.label} VORP`;
+  if (copy) {
+    const med = cell.medianVorp === null ? 'no median available' : `median ${cell.medianVorp} career VORP`;
+    copy.textContent = `${cell.count} of ${cell.total} reliable players landed here (${cell.rate}%). ${med}.`;
+  }
+  if (examples) {
+    examples.innerHTML = cell.examples.length
+      ? cell.examples.map(ex => `<div class="draft-example">
+          <div><strong>${ex.player}</strong><br><span>${ex.season} · pick ${ex.pick}</span></div>
+          <em>${ex.vorp} VORP</em>
+        </div>`).join('')
+      : '<div class="draft-example"><strong>No reliable examples</strong><em>0</em></div>';
+  }
+  if (redraw && !document.querySelector('.draft-cell')) drawDraftHeatmap();
+}
+
+// =============================================================================
 // INIT
 // =============================================================================
 Object.assign(window, {
@@ -1945,10 +2679,16 @@ Object.assign(window, {
   selectAct3Player,
   setMode,
   setSimilarityAnchor,
+  setShotZoneYear,
+  setShotMapMode,
+  drawShotZoneHeatmap,
+  drawDraftHeatmap,
+  selectDraftCell,
 });
 
 bindQuickpicks();
-showSection('hero');
+setupScrollNarrative();
+renderSection('hero');
 
 // Load act1 eagerly for hero chart
 ensureLoaded('act1').then(() => drawHeroChart());
@@ -1957,3 +2697,4 @@ ensureLoaded('act1').then(() => drawHeroChart());
 const prefetchIdle = window.requestIdleCallback || (cb => setTimeout(cb, 600));
 prefetchIdle(() => ensureLoaded('act4'));
 prefetchIdle(() => { ensureLoaded('act2'); ensureLoaded('act3'); });
+prefetchIdle(() => { ensureLoaded('act1Shots'); ensureLoaded('act1Real'); ensureLoaded('act5'); });
