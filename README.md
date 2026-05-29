@@ -2,16 +2,16 @@
 
 **An interactive data story about the NBA's structural transformation, 1946–2026.**
 
-[**▶ Live site**](https://com-480-data-visualization.github.io/airball/website/index.html) · [Process book](./reports/Milestone%203/process_book.pdf) · [Screencast script](./reports/Milestone%203/screencast_script.md)
+[**▶ Live site**](https://com-480-data-visualization.github.io/airball/website/index.html) · [Process book](./reports/Milestone%203/process_book.pdf) · Screencast in `report/Milestone 3/screencast.mp4`
 
 COM-480 Data Visualization Project · EPFL · Spring 2026
 
-| Student | SCIPER |
-| --- | --- |
-| Elias Mir | 341277 |
+| Student         | SCIPER |
+| --------------- | ------ |
+| Elias Mir       | 341277 |
 | Michael Freeman | 313215 |
 | Yassine Mamlouk | 327081 |
-| Aziz Laadhar | 315196 |
+| Aziz Laadhar    | 315196 |
 
 ---
 
@@ -34,12 +34,12 @@ The site is a static SPA. No build step, no framework, no bundler. Just open `we
 
 ### Stack
 
-| Layer | Tool |
-| --- | --- |
-| Visualization | **D3.js v7** (all four acts) |
-| Styling | Hand-written CSS (custom properties, CSS grid, media queries) |
-| Data prep | **pandas** + **numpy** (Python, one-shot script) |
-| Hosting | GitHub Pages |
+| Layer         | Tool                                                          |
+| ------------- | ------------------------------------------------------------- |
+| Visualization | **D3.js v7** (all four acts)                                  |
+| Styling       | Hand-written CSS (custom properties, CSS grid, media queries) |
+| Data prep     | **pandas** + **numpy** (Python, one-shot script)              |
+| Hosting       | GitHub Pages                                                  |
 
 ### Run locally
 
@@ -80,6 +80,7 @@ The script cleans the data (NBA only, dedup mid-season trades, filter low-minute
 
 ```
 airball/
+├── archive/                # Contains the Kaggle dataset CSVs
 ├── index.html              # GitHub Pages root → redirects to /website/
 ├── README.md
 ├── website/
@@ -93,7 +94,7 @@ airball/
 │   └── act4_dynasties.json
 ├── scripts/
 │   └── extract_data.py     # Raw CSV → JSON pipeline
-└── reports/                # Milestone deliverables (PDFs)
+└── reports/                # Milestone deliverables
     ├── Milestone 1/
     ├── Milestone 2/
     └── Milestone 3/        # Process book + screencast (M3)
@@ -124,7 +125,7 @@ The site is fully responsive (down to ~360px wide) and respects `prefers-reduced
 
 ## Acknowledgements & related work
 
-- Kirk Goldsberry, *SprawlBall* (2019) — inspiration for the mid-range decline narrative.
+- Kirk Goldsberry, _SprawlBall_ (2019) — inspiration for the mid-range decline narrative.
 - [FiveThirtyEight RAPTOR](https://fivethirtyeight.com/) — reference for era-normalized player ratings.
 - [Basketball-Reference.com](https://www.basketball-reference.com) — the canonical source for all of this.
 
@@ -132,8 +133,8 @@ The site is fully responsive (down to ~360px wide) and respects `prefers-reduced
 
 ## Milestones
 
-| | Date | Weight | Deliverable |
-| --- | --- | --- | --- |
-| M1 | 2026-03-20 | 10% | [Project proposal (PDF)](./reports/Milestone%201/Milestone%201%20(Airball).pdf) |
-| M2 | 2026-04-17 | 10% | [Prototype + sketches (PDF)](./reports/Milestone%202/Milestone%202%20(Airball).pdf) |
-| M3 | 2026-05-28 | 80% | This repo + process book + screencast |
+|     | Date       | Weight | Deliverable                                                                           |
+| --- | ---------- | ------ | ------------------------------------------------------------------------------------- |
+| M1  | 2026-03-20 | 10%    | [Project proposal (PDF)](<./reports/Milestone%201/Milestone%201%20(Airball).pdf>)     |
+| M2  | 2026-04-17 | 10%    | [Prototype + sketches (PDF)](<./reports/Milestone%202/Milestone%202%20(Airball).pdf>) |
+| M3  | 2026-05-28 | 80%    | This repo + process book + screencast                                                 |
