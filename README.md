@@ -1,81 +1,140 @@
-# Project of Data Visualization (COM-480)
+# 🏀 Airball — 78 Years of Basketball, One Story
 
-| Student's name | SCIPER |
-| -------------- | ------ |
-| Elias Mir | 341277 |
+**An interactive data story about the NBA's structural transformation, 1946–2026.**
+
+[**▶ Live site**](https://com-480-data-visualization.github.io/airball/website/index.html) · [Process book](./reports/Milestone%203/process_book.pdf) · Screencast in `report/Milestone 3/screencast.mp4`
+
+COM-480 Data Visualization Project · EPFL · Spring 2026
+
+| Student         | SCIPER |
+| --------------- | ------ |
+| Elias Mir       | 341277 |
 | Michael Freeman | 313215 |
 | Yassine Mamlouk | 327081 |
-| Aziz Laadhar | 315196 |
+| Aziz Laadhar    | 315196 |
 
-[Milestone 1](#milestone-1) • [Milestone 2](#milestone-2) • [Milestone 3](#milestone-3)
+---
 
-## Milestone 1 (20th March, 5pm)
+## What this is
 
-**10% of the final grade**
+Most fans see the NBA through box scores and highlight reels — they never see the macro-level patterns that have reshaped the game. **Airball** is a four-act scrollytelling experience that makes those structural shifts visible:
 
-This is a preliminary milestone to let you set up goals for your final project and assess the feasibility of your ideas.
-Please, fill the following sections about your project.
+1. **Act I — The Revolution.** The 3-point shot's journey from gimmick to system, 1980–2026.
+2. **Act II — Era Explorer.** Every player-season as a bubble. Drag through 45 seasons of NBA history.
+3. **Act III — Player vs Player.** Era-normalized radar comparisons — Jordan vs Jokic, fairly.
+4. **Act IV — Dynasties.** Six franchises that defined modern basketball, with championship markers.
 
-*(max. 2000 characters per section)*
+**Target audience:** sports enthusiasts and data-curious readers — no analytics background required.
 
-### Dataset
+---
 
-Our primary source is the **NBA Stats dataset on Kaggle** ([sumitrodatta/nba-aba-baa-stats](https://www.kaggle.com/datasets/sumitrodatta/nba-aba-baa-stats)), compiled from [Basketball-Reference.com](https://www.basketball-reference.com). It covers every player and team season from 1946 to 2024 across several CSV files: per-game stats, advanced metrics (PER, VORP, BPM, Win Shares, True Shooting%, Usage Rate), team summaries, shooting splits (from ~1997), and award data. Two supplementary datasets extend the analysis: (1) a **salary dataset** (Kaggle/HoopsHype, 1990–2024) for payroll efficiency analysis, and (2) **draft data** from Basketball-Reference for career arc exploration.
+## Technical setup
 
-**Data quality:** Basketball-Reference is the industry gold standard used by researchers and journalists alike. Missing values are limited to statistics not tracked in early seasons (three-point data before 1979–80; shot-distance data before ~1997). Salary data requires extra care due to inconsistent name formats across sources.
+The site is a static SPA. No build step, no framework, no bundler. Just open `website/index.html`.
 
-**Pre-processing required:** normalize player names for cross-file joins; drop duplicate rows for mid-season trades, keeping the `TOT` aggregate; filter players with fewer than 10 games or 10 min/game; inflation-adjust salaries; build a franchise-continuity map (e.g. SEA → OKC, NJN → BKN) for consistent team-level analysis. Overall the dataset is clean, well-structured, and well-suited for a visualization-focused project.
+### Stack
 
-### Problematic
+| Layer         | Tool                                                          |
+| ------------- | ------------------------------------------------------------- |
+| Visualization | **D3.js v7** (all four acts)                                  |
+| Styling       | Hand-written CSS (custom properties, CSS grid, media queries) |
+| Data prep     | **pandas** + **numpy** (Python, one-shot script)              |
+| Hosting       | GitHub Pages                                                  |
 
-The NBA has been radically transformed by analytics over the past two decades: the three-point explosion, the collapse of the mid-range shot, the rise of pace-and-space offenses, and a supermax salary era have reshaped every aspect of the game. Yet most fans consume the NBA through box scores and highlight reels, never seeing the macro-level patterns that drive these changes.
+### Run locally
 
-**Our goal** is to make these structural shifts visible, interactive, and accessible to a broad audience — from data-savvy analysts to casual fans curious how today's NBA compares to the Jordan or Shaq era. We organize the story around four questions:
+```bash
+git clone https://github.com/com-480-data-visualization/airball.git
+cd airball
 
-1. *How has play style evolved?* — tracing the three-point revolution and the death of the mid-range shot.
-2. *Who were the most efficient players of each era?* — using advanced metrics to enable fair cross-generation comparison.
-3. *Does payroll buy wins?* — mapping salary allocation against team performance and championship outcomes.
-4. *How predictable is the draft?* — identifying which draft positions reliably produce stars.
+# Serve the static site (any HTTP server works)
+python3 -m http.server 8000
+# → open http://localhost:8000/website/
+```
 
-**Target audience:** sports enthusiasts and data-curious readers requiring no analytics background, with a secondary audience of researchers wanting exploratory tools.
+That's it. The pre-computed JSON data lives in `js/` and is committed to the repo.
 
-### Exploratory Data Analysis
+### Regenerate the data (optional)
 
-The cleaned dataset contains **14,924 player-seasons** spanning 1977–2026, covering 2,760 unique players across an average of 27.6 teams per season. Pre-processing steps applied: normalized player names for cross-file joins; removed mid-season trade duplicates, keeping only the `TOT` aggregate row; filtered to players with ≥10 games and ≥10 minutes per game; merged per-game and advanced metric CSVs on `player_id` and `season`.
+If you want to re-run the data pipeline from raw CSVs:
 
-**Per-Era League Averages**
+```bash
+# 1. Download the source dataset from Kaggle
+#    https://www.kaggle.com/datasets/sumitrodatta/nba-aba-baa-stats
+#    Place all CSV files inside a `data/` folder at the repo root.
+#    If `data/` is absent, the script falls back to the committed `archive/` folder.
 
-| Era | 3PA/game | Pace | Avg TS% | Avg PTS/g |
-| ----- | -------- | ----- | ------- | --------- |
-| 1980s | 3.5 | 101.5 | 52.9% | 11.1 |
-| 1990s | 11.5 | 93.8 | 52.5% | 10.4 |
-| 2000s | 15.7 | 91.4 | 52.0% | 9.8 |
-| 2010s | 23.1 | 94.5 | 53.6% | 9.9 |
-| 2020s | 34.6 | 99.1 | 56.8% | 10.9 |
+# 2. Install Python deps
+pip install pandas numpy
 
-Three-point attempts grew **10×** from the 1980s to the 2020s, accelerating sharply after 2012 as analytics departments quantified the shot's efficiency advantage. Pace slowed dramatically through the 1990s–2000s (historic low of 91.4) before rebounding in the modern era. True Shooting% climbed steadily from 52.9% to 56.8%, reflecting the shift toward high-value shots. Null values were minimal: 19 missing entries in `ts_percent`, `vorp`, and `per` (early seasons), and 240 in `usg_percent` (pre-1982, before reliable play-by-play tracking). Team-level VORP correlates with win percentage at r > 0.7 (p < 0.001), confirming advanced metrics as meaningful cross-era proxies.
+# 3. Run the extraction script
+python3 scripts/extract_data.py
+# → writes fresh JSON to js/
+```
 
-### Related work
+The script cleans the data (NBA only, dedup mid-season trades, filter low-minutes players), merges per-game with advanced stats, computes percentile-normalized career stats for Act III, and emits one compact JSON per act.
 
-**Existing work on this data:**
-- Kirk Goldsberry, *SprawlBall* (2019): static shot-chart graphics showing the mid-range decline; we extend this concept interactively.
-- [Basketball-Reference.com](https://www.basketball-reference.com): offers static tables but no cross-era interactive comparison.
-- [FiveThirtyEight RAPTOR](https://fivethirtyeight.com/features/this-lakers-season-was-a-trainwreck-and-theres-no-easy-way-to-get-back-on-track/): advanced player ratings with static, non-exploratory presentation.
+---
 
-**Originality:** no existing tool combines animated league-wide trend narratives, an era-normalized player comparison tool, and interactive payroll-efficiency analysis in one cohesive experience. We combine scrollytelling narrative structure with open-ended Gapminder-style exploration, applied to a domain with a very wide potential audience.
+## Repo structure
 
-## Milestone 2 (17th April, 5pm)
+```
+airball/
+├── archive/                # Contains the Kaggle dataset CSVs
+├── index.html              # GitHub Pages root → redirects to /website/
+├── README.md
+├── website/
+│   ├── index.html          # SPA shell with four acts
+│   ├── main.js             # D3 charts + lazy-loaded data
+│   └── styles.css          # All styles incl. responsive + a11y
+├── js/                     # Pre-computed JSON, one per act
+│   ├── act1_revolution.json
+│   ├── act2_bubbles.json
+│   ├── act3_players.json
+│   └── act4_dynasties.json
+├── scripts/
+│   └── extract_data.py     # Raw CSV → JSON pipeline
+└── reports/                # Milestone deliverables
+    ├── Milestone 1/
+    ├── Milestone 2/
+    └── Milestone 3/        # Process book + screencast (M3)
+```
 
-**10% of the final grade**
-[Milestone 2 PDF](./Milestone%202/Milestone%202%20(Airball).pdf)
+---
 
-## Milestone 3 (29th May, 5pm)
+## Intended usage
 
-**80% of the final grade**
+- **Casual reading.** Click through the four acts in order. Each one stands alone.
+- **Exploration.** Act II is the sandbox: hit Play to watch the league morph from 1982 → 2026; search any player by name to highlight them; positions are colour-coded.
+- **Comparison.** In Act III, type any two players. Toggle Normalized ↔ Raw to switch between cross-era percentile and absolute career averages.
+- **Storytelling.** Act IV lets you toggle dynasties on/off. Gold diamonds (◆) mark championship-winning seasons.
 
+The site is fully responsive (down to ~360px wide) and respects `prefers-reduced-motion`.
 
-## Late policy
+---
 
-- < 24h: 80% of the grade for the milestone
-- < 48h: 70% of the grade for the milestone
+## Data
 
+**Primary source.** [NBA / ABA / BAA Stats](https://www.kaggle.com/datasets/sumitrodatta/nba-aba-baa-stats) on Kaggle — itself scraped from [Basketball-Reference](https://www.basketball-reference.com). Covers 1946–2026 across player per-game, advanced metrics, team summaries, and shooting splits.
+
+**Pre-processing.** NBA-only filter; mid-season trade dedup (keep `TOT` / `2TM` aggregate rows); ≥10 games and ≥10 mpg threshold; per-game ⨝ advanced on `(season, player_id)`; weighted-mean career aggregation; percentile normalization at the 5th–95th range.
+
+**Limitations.** Three-point data starts in 1979–80, shot-distance data in 1996–97. Salary data not currently used.
+
+---
+
+## Acknowledgements & related work
+
+- Kirk Goldsberry, _SprawlBall_ (2019) — inspiration for the mid-range decline narrative.
+- [FiveThirtyEight RAPTOR](https://fivethirtyeight.com/) — reference for era-normalized player ratings.
+- [Basketball-Reference.com](https://www.basketball-reference.com) — the canonical source for all of this.
+
+---
+
+## Milestones
+
+|     | Date       | Weight | Deliverable                                                                           |
+| --- | ---------- | ------ | ------------------------------------------------------------------------------------- |
+| M1  | 2026-03-20 | 10%    | [Project proposal (PDF)](<./reports/Milestone%201/Milestone%201%20(Airball).pdf>)     |
+| M2  | 2026-04-17 | 10%    | [Prototype + sketches (PDF)](<./reports/Milestone%202/Milestone%202%20(Airball).pdf>) |
+| M3  | 2026-05-28 | 80%    | This repo + process book + screencast                                                 |
